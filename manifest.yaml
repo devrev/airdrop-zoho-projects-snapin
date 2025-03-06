@@ -1,0 +1,50 @@
+version: "2"
+
+name: Airdrop Zoho Projects Snapin
+description: Airdrop Zoho Projects Snapin
+
+service_account:
+  display_name: Airdrop Zoho Projects Snapin Bot
+
+developer_keyrings:
+  - name: github_access_token
+    description: GitHub access token
+    display_name: GitHub Access Token
+
+build_config:
+  environment_variables:
+    - name: GITHUB_ACCESS_TOKEN
+      description: Token to access GitHub packages
+      type: keyring
+      value: github_access_token
+
+functions:
+  - name: extraction
+    description: Extraction function for Airdrop Zoho Projects Snapin
+  - name: install_initial_domain_mapping
+    description: Create blueprint and install initial domain mapping
+
+keyring_types:
+  - id: example-connection
+    name: Example Connection
+    description: Example Connection
+    kind: "Secret"
+    is_subdomain: true
+    secret_config:
+      secret_transform: ".token" # a JQ query
+      fields:
+        - id: token
+          name: Token
+          description: Example API token
+
+imports:
+  - slug: airdrop-zoho-projects-snapin-extractor
+    display_name: Airdrop Zoho Projects Snapin
+    description: Airdrop Zoho Projects Snapin
+    extractor_function: extraction
+    allowed_connection_types:
+      - example-connection
+
+hooks:
+  - type: activate
+    function: install_initial_domain_mapping
