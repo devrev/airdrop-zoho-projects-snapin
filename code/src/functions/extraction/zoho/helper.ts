@@ -1,5 +1,9 @@
+import { NormalizedItem, RepoInterface } from '@devrev/ts-adaas';
 import { AxiosError } from 'axios';
-import { ExtractorState } from './types';
+import { normalizeComment, normalizeIssue, normalizeTask, normalizeUser } from './data-normalization';
+import { ExtractorState, ItemType } from './types';
+
+export const DEFAULT_DATE = '1970-01-01T00:00:00Z';
 
 export class ZohoError extends Error {
   constructor(message: string) {
@@ -21,23 +25,33 @@ export class ZohoRateLimitError extends ZohoError {
 export const handleZohoError = (error: AxiosError): never => {
   if (error.response) {
     const status = error.response.status;
-    const data = error.response.data as any;
-
     if (status === 429) {
-      // Rate limit exceeded
       const retryAfter = parseInt(error.response.headers['retry-after'] || '60', 10);
-      throw new ZohoRateLimitError(retryAfter * 1000); // Convert to milliseconds
+      throw new ZohoRateLimitError(retryAfter * 1000);
     }
-
-    throw new ZohoError(data.message || `Zoho API error: ${status} - ${JSON.stringify(data)}`);
+    throw new ZohoError(`Zoho API error: ${status}`);
   }
-
-  if (error.request) {
-    throw new ZohoError('No response received from Zoho API');
-  }
-
-  throw new ZohoError(`Error setting up request: ${error.message}`);
+  throw new ZohoError(error.message);
 };
+
+export const repos: RepoInterface[] = [
+  {
+    itemType: ItemType.USERS,
+    normalize: normalizeUser as (record: object) => NormalizedItem,
+  },
+  {
+    itemType: ItemType.TASKS,
+    normalize: normalizeTask as (record: object) => NormalizedItem,
+  },
+  {
+    itemType: ItemType.ISSUES,
+    normalize: normalizeIssue as (record: object) => NormalizedItem,
+  },
+  {
+    itemType: ItemType.COMMENTS,
+    normalize: normalizeComment as (record: object) => NormalizedItem,
+  },
+];
 
 export const initialState: ExtractorState = {
   users: {
@@ -60,4 +74,6 @@ export const initialState: ExtractorState = {
   lastSuccessfulSyncStarted: '',
   portal_id: '',
   project_id: '',
+  extractedTasks: [],
+  extractedIssues: [],
 };

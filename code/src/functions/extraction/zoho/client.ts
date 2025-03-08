@@ -53,6 +53,7 @@ export class ZohoClient {
 
   constructor(config: ZohoConfig) {
     this.config = config;
+    console.log('limbo access token:', config.accessToken);
     this.client = axios.create({
       baseURL: config.baseUrl || ZOHO_API_BASE,
       headers: {
@@ -153,7 +154,7 @@ export class ZohoClient {
     try {
       const response = await this.client.get(`/portal/${portalId}/projects/${projectId}/tasks/${taskId}/comments/`);
       console.log('taskCommentsResponse in client.ts', JSON.stringify(response.data, null, 2));
-      return response.data;
+      return response;
     } catch (error) {
       if (error instanceof Error) {
         throw handleZohoError(error as AxiosError);

@@ -1,77 +1,49 @@
 import { ExtractorEventType, processTask, SyncMode, WorkerAdapter } from '@devrev/ts-adaas';
-import {
-  normalizeComment,
-  normalizeIssue,
-  normalizeTask,
-  normalizeUser,
-  ZohoClient,
-  ZohoExtractorState,
-  ZohoItemType,
-} from '../zoho/client';
-import { NormalizedItem, RepoInterface } from '../zoho/types';
+import { ZohoClient } from '../zoho/client';
+import { repos, ZohoRateLimitError } from '../zoho/helper';
+import { ExtractorState, ItemType, ZohoIssue, ZohoTask, ZohoUser } from '../zoho/types';
 
-// Constants
-const ZOHO_PORTAL_ID = '881214965';
-const ZOHO_PROJECT_ID = '2447529000000057070';
+const itemTypesToExtract = [ItemType.USERS, ItemType.TASKS, ItemType.ISSUES];
+const PORTAL_ID = '881214965';
+const PROJECT_ID = '2447529000000057070';
 
-// Repos configuration
-const repos: RepoInterface[] = [
-  {
-    itemType: ZohoItemType.ISSUES,
-    normalize: normalizeZohoIssue as (record: object) => NormalizedItem,
-  },
-  {
-    itemType: ZohoItemType.TASKS,
-    normalize: normalizeZohoTask as (record: object) => NormalizedItem,
-  },
-  {
-    itemType: ZohoItemType.COMMENTS,
-    normalize: normalizeComment as (record: object) => NormalizedItem,
-  },
-  {
-    itemType: ZohoItemType.USERS,
-    normalize: normalizeZohoUser as (record: object) => NormalizedItem,
-  },
-];
-
-const getItemTypesToExtract = () =>
-  repos.map((repo) => ({
-    name: repo.itemType,
-    repoName: repo.itemType.toString(),
-  }));
-
-processTask<ZohoExtractorState>({
+processTask<ExtractorState>({
   task: async ({ adapter }) => {
     adapter.initializeRepos(repos);
 
+    // Initialize arrays for storing extracted task and issue IDs
+    adapter.state.extractedTasks = [];
+    adapter.state.extractedIssues = [];
+
     let stop = false;
-    const itemTypesToExtract = getItemTypesToExtract();
 
     if (adapter.event.payload.event_context.mode === SyncMode.INCREMENTAL) {
       adapter.state.lastSyncStarted = new Date().toISOString();
       console.log('Incremental extraction, setting complete to false for all item types.');
-      for (const itemTypeToExtract of itemTypesToExtract) {
-        adapter.state[itemTypeToExtract.name].complete = false;
-        adapter.state[itemTypeToExtract.name].page = 1;
+      for (const itemType of itemTypesToExtract) {
+        if (itemType in adapter.state && typeof adapter.state[itemType] === 'object') {
+          adapter.state[itemType].complete = false;
+          adapter.state[itemType].page = 1;
+        }
       }
     }
 
-    for (const itemTypeToExtract of itemTypesToExtract) {
+    const client = new ZohoClient({
+      accessToken: adapter.event.payload.connection_data.key,
+      portalId: PORTAL_ID,
+      projectId: PROJECT_ID,
+    });
+
+    for (const itemType of itemTypesToExtract) {
       if (stop) break;
 
-      if (!adapter.state[itemTypeToExtract.name].complete) {
-        stop = await extractList(adapter, itemTypeToExtract);
+      if (itemType in adapter.state && !adapter.state[itemType].complete) {
+        stop = await extractList(adapter, client, itemType);
       }
     }
 
-    if (!stop) {
-      if (adapter.state.extractedIssues.length > 0) {
-        stop = await extractIssueComments(adapter);
-      }
-
-      if (!stop && adapter.state.extractedTasks.length > 0) {
-        stop = await extractTaskComments(adapter);
-      }
+    if (!stop && (adapter.state.extractedTasks.length > 0 || adapter.state.extractedIssues.length > 0)) {
+      stop = await extractComments(adapter, client);
     }
 
     if (!stop) {
@@ -87,51 +59,82 @@ processTask<ZohoExtractorState>({
 });
 
 async function extractList(
-  adapter: WorkerAdapter<ZohoExtractorState>,
-  itemTypeToExtract: { name: ZohoItemType; repoName: string }
+  adapter: WorkerAdapter<ExtractorState>,
+  client: ZohoClient,
+  itemType: ItemType
 ): Promise<boolean> {
-  console.log(`Extracting ${itemTypeToExtract.name}`);
-
-  const zohoClient = new ZohoClient({
-    accessToken: adapter.event.payload.connection_data.key,
-    portalId: ZOHO_PORTAL_ID,
-    projectId: ZOHO_PROJECT_ID,
-  });
+  console.log(`Extracting ${itemType}`);
 
   try {
-    let response;
-    switch (itemTypeToExtract.name) {
-      case ZohoItemType.USERS:
-        response = await zohoClient.getUsers(ZOHO_PORTAL_ID, ZOHO_PROJECT_ID);
+    let items: ZohoUser[] | ZohoTask[] | ZohoIssue[];
+
+    switch (itemType) {
+      case ItemType.USERS:
+        const usersResponse = await client.getUsers(PORTAL_ID, PROJECT_ID);
+        items = usersResponse.users;
         break;
-      case ZohoItemType.ISSUES:
-        response = await zohoClient.getIssues(ZOHO_PORTAL_ID, ZOHO_PROJECT_ID);
-        if (response.data.issues) {
-          adapter.state.extractedIssues.push(...response.data.issues.map((issue) => issue.id.toString()));
-        }
+      case ItemType.TASKS:
+        const tasksResponse = await client.getTasks(PORTAL_ID, PROJECT_ID);
+        items = tasksResponse.data.tasks;
         break;
-      case ZohoItemType.TASKS:
-        response = await zohoClient.getTasks(ZOHO_PORTAL_ID, ZOHO_PROJECT_ID);
-        if (response.data.tasks) {
-          adapter.state.extractedTasks.push(...response.data.tasks.map((task) => task.id.toString()));
-        }
+      case ItemType.ISSUES:
+        const issuesResponse = await client.getIssues(PORTAL_ID, PROJECT_ID);
+        items = issuesResponse.data.issues;
         break;
+      default:
+        return false;
     }
 
-    if (!response || !response.data) {
-      console.log(`No data found for ${itemTypeToExtract.name}`);
-      adapter.state[itemTypeToExtract.name].complete = true;
+    if (!items || items.length === 0) {
+      console.log(`No more data of type ${itemType} to extract. Setting state complete.`);
+      if (itemType in adapter.state) {
+        adapter.state[itemType].complete = true;
+      }
       return false;
     }
 
-    await adapter
-      .getRepo(itemTypeToExtract.repoName)
-      ?.push(Array.isArray(response.data) ? response.data : response.data[itemTypeToExtract.name]);
+    try {
+      const repo = adapter.getRepo(itemType);
+      if (!repo) {
+        console.error(`Repository for ${itemType} not found`);
+        await adapter.emit(ExtractorEventType.ExtractionDataError, {
+          error: { message: `Repository for ${itemType} not found` },
+        });
+        return true;
+      }
+      await repo.push(items);
 
-    adapter.state[itemTypeToExtract.name].complete = true;
-    return false;
+      if (itemType === ItemType.TASKS) {
+        const tasks = items as ZohoTask[];
+        adapter.state.extractedTasks = []; // Reset the array to avoid duplicates
+        adapter.state.extractedTasks.push(...tasks.map((task) => String(task.id_string)));
+        console.log('Extracted task IDs:', adapter.state.extractedTasks);
+      } else if (itemType === ItemType.ISSUES) {
+        const issues = items as ZohoIssue[];
+        adapter.state.extractedIssues.push(...issues.map((issue) => issue.id));
+      }
+
+      if (itemType in adapter.state) {
+        adapter.state[itemType].complete = true;
+      }
+      return false;
+    } catch (error) {
+      console.error(`Error pushing ${itemType}:`, error);
+      await adapter.emit(ExtractorEventType.ExtractionDataError, {
+        error: { message: error instanceof Error ? error.message : 'Unknown error' },
+      });
+      return true;
+    }
   } catch (error) {
-    console.error(`Error extracting ${itemTypeToExtract.name}:`, error);
+    if (error instanceof ZohoRateLimitError) {
+      console.log(`Rate limit reached. Reset in ${error.delay} milliseconds`);
+      await adapter.emit(ExtractorEventType.ExtractionDataDelay, {
+        delay: error.delay,
+      });
+      return true;
+    }
+
+    console.error(`Error extracting ${itemType}:`, error);
     await adapter.emit(ExtractorEventType.ExtractionDataError, {
       error: { message: error instanceof Error ? error.message : 'Unknown error' },
     });
@@ -139,58 +142,70 @@ async function extractList(
   }
 }
 
-async function extractIssueComments(adapter: WorkerAdapter<ZohoExtractorState>): Promise<boolean> {
-  const zohoClient = new ZohoClient({
-    accessToken: adapter.event.payload.connection_data.key,
-    portalId: ZOHO_PORTAL_ID,
-    projectId: ZOHO_PROJECT_ID,
-  });
+async function extractComments(adapter: WorkerAdapter<ExtractorState>, client: ZohoClient): Promise<boolean> {
+  console.log('Extracting comments');
 
-  while (adapter.state.extractedIssues.length > 0) {
-    const issueId = adapter.state.extractedIssues[0];
+  // Extract task comments
+  const taskIds = [...adapter.state.extractedTasks]; // Create a copy of task IDs
+  adapter.state.extractedTasks = []; // Clear the original array immediately
 
+  for (const taskId of taskIds) {
     try {
-      const response = await zohoClient.getIssueComments(ZOHO_PORTAL_ID, ZOHO_PROJECT_ID, issueId);
-      if (response.data.comments && response.data.comments.length > 0) {
-        await adapter.getRepo(ZohoItemType.COMMENTS)?.push(response.data.comments);
+      console.log('Fetching comments for task:', taskId);
+      const response = await client.getTaskComments(PORTAL_ID, PROJECT_ID, taskId);
+      if (response.data?.comments?.length > 0) {
+        const comments = response.data.comments.map((comment) => ({
+          ...comment,
+          source_type: 'task',
+          source_id: taskId,
+        }));
+        await adapter.getRepo(ItemType.COMMENTS)?.push(comments);
       }
     } catch (error) {
-      console.error(`Error fetching comments for issue ${issueId}:`, error);
-      await adapter.emit(ExtractorEventType.ExtractionDataError, {
-        error: { message: error instanceof Error ? error.message : 'Unknown error' },
-      });
-      return true;
-    }
-
-    adapter.state.extractedIssues.shift();
-  }
-  return false;
-}
-
-async function extractTaskComments(adapter: WorkerAdapter<ZohoExtractorState>): Promise<boolean> {
-  const zohoClient = new ZohoClient({
-    accessToken: adapter.event.payload.connection_data.key,
-    portalId: ZOHO_PORTAL_ID,
-    projectId: ZOHO_PROJECT_ID,
-  });
-
-  while (adapter.state.extractedTasks.length > 0) {
-    const taskId = adapter.state.extractedTasks[0];
-
-    try {
-      const response = await zohoClient.getTaskComments(ZOHO_PORTAL_ID, ZOHO_PROJECT_ID, taskId);
-      if (response.comments && response.comments.length > 0) {
-        await adapter.getRepo(ZohoItemType.COMMENTS)?.push(response.comments);
+      if (error instanceof ZohoRateLimitError) {
+        // Put remaining tasks back in the queue
+        adapter.state.extractedTasks.push(...taskIds.slice(taskIds.indexOf(taskId)));
+        console.log(`Rate limit reached. Reset in ${error.delay} milliseconds`);
+        await adapter.emit(ExtractorEventType.ExtractionDataDelay, {
+          delay: error.delay,
+        });
+        return true;
       }
-    } catch (error) {
       console.error(`Error fetching comments for task ${taskId}:`, error);
-      await adapter.emit(ExtractorEventType.ExtractionDataError, {
-        error: { message: error instanceof Error ? error.message : 'Unknown error' },
-      });
-      return true;
+      // Continue with next task on error
     }
-
-    adapter.state.extractedTasks.shift();
   }
-  return false;
+
+  // Extract issue comments
+  const issueIds = [...adapter.state.extractedIssues]; // Create a copy of issue IDs
+  adapter.state.extractedIssues = []; // Clear the original array immediately
+
+  for (const issueId of issueIds) {
+    try {
+      console.log('Fetching comments for issue:', issueId);
+      const response = await client.getIssueComments(PORTAL_ID, PROJECT_ID, issueId);
+      if (response.data?.comments?.length > 0) {
+        const comments = response.data.comments.map((comment) => ({
+          ...comment,
+          source_type: 'issue',
+          source_id: issueId,
+        }));
+        await adapter.getRepo(ItemType.COMMENTS)?.push(comments);
+      }
+    } catch (error) {
+      if (error instanceof ZohoRateLimitError) {
+        // Put remaining issues back in the queue
+        adapter.state.extractedIssues.push(...issueIds.slice(issueIds.indexOf(issueId)));
+        console.log(`Rate limit reached. Reset in ${error.delay} milliseconds`);
+        await adapter.emit(ExtractorEventType.ExtractionDataDelay, {
+          delay: error.delay,
+        });
+        return true;
+      }
+      console.error(`Error fetching comments for issue ${issueId}:`, error);
+      // Continue with next issue on error
+    }
+  }
+
+  return false; // Changed to false since we've processed everything successfully
 }

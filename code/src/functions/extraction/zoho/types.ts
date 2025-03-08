@@ -1,24 +1,38 @@
+export enum ItemType {
+  USERS = 'users',
+  TASKS = 'tasks',
+  ISSUES = 'issues',
+  COMMENTS = 'comments',
+}
+
+export enum ItemTypeExtractFunction {
+  GET_USERS = 'getUsers',
+  GET_TASKS = 'getTasks',
+  GET_ISSUES = 'getIssues',
+  GET_COMMENTS = 'getComments',
+}
+
+export interface ItemTypeToExtract {
+  name: ItemType;
+  functionName: ItemTypeExtractFunction;
+}
+
+type ExtractorStateBase = {
+  complete: boolean;
+  page: number;
+};
+
 export interface ExtractorState {
-  users: {
-    complete: boolean;
-    page: number;
-  };
-  tasks: {
-    complete: boolean;
-    page: number;
-  };
-  issues: {
-    complete: boolean;
-    page: number;
-  };
-  comments: {
-    complete: boolean;
-    page: number;
-  };
-  portal_id?: string;
-  project_id?: string;
+  [ItemType.USERS]: ExtractorStateBase;
+  [ItemType.TASKS]: ExtractorStateBase;
+  [ItemType.ISSUES]: ExtractorStateBase;
+  [ItemType.COMMENTS]: ExtractorStateBase;
+  extractedTasks: string[];
+  extractedIssues: string[];
   lastSyncStarted: string;
   lastSuccessfulSyncStarted: string;
+  portal_id: string;
+  project_id: string;
 }
 
 export interface ZohoConfig {
@@ -53,19 +67,24 @@ export interface ZohoUser {
   active: boolean;
 }
 
+export interface ZohoStatus {
+  type: string;
+  id: string;
+  name?: string;
+}
+
+export interface ZohoSeverity {
+  type: string;
+  id: string;
+}
+
 export interface ZohoIssue {
   id: string;
   title: string;
   description: string;
   bug_number: string;
-  status: {
-    type: string;
-    id: string;
-  };
-  severity: {
-    type: string;
-    id: string;
-  };
+  status: ZohoStatus;
+  severity: ZohoSeverity;
   created_time: string;
   updated_time: string;
   reporter_id: string;
@@ -116,60 +135,22 @@ export interface ZohoTask {
   id_string: string;
   name: string;
   description: string;
-  key: string;
   status: ZohoTaskStatus;
   priority: string;
   created_time: string;
-  created_time_format: string;
-  created_time_long: number;
   last_updated_time: string;
-  last_updated_time_format: string;
-  last_updated_time_long: number;
   created_by: string;
-  created_by_email: string;
-  created_by_full_name: string;
-  created_by_zpuid: string;
-  created_person: string;
   percent_complete: string;
-  completed: boolean;
   details: ZohoTaskDetails;
   tasklist: ZohoTaskList;
   link: ZohoTaskLink;
+  log_hours: ZohoTaskLogHours;
   start_date: string;
-  start_date_format: string;
-  start_date_long: number;
   end_date: string;
-  end_date_format: string;
-  end_date_long: number;
   duration: string;
   duration_type: string;
-  work: string;
-  work_type: string;
-  work_form: string;
-  log_hours: ZohoTaskLogHours;
-  isparent: boolean;
-  subtasks: boolean;
-  is_comment_added: boolean;
-  is_forum_associated: boolean;
-  is_docs_assocoated: boolean;
-  is_reminder_set: boolean;
-  is_recurrence_set: boolean;
-  task_duration_as_work: boolean;
-  billingtype: string;
-  order_sequence: number;
-  milestone_id: string;
-  task_followers?: {
-    FOLUSERS: string;
-    FOLLOWERSIZE: number;
-    FOLLOWERS: any[];
-  };
-  GROUP_NAME?: {
-    ASSOCIATED_TEAMS: {
-      [key: string]: string;
-    };
-    ASSOCIATED_TEAMS_COUNT: number;
-    IS_TEAM_UNASSIGNED: boolean;
-  };
+  completed: boolean;
+  key: string;
 }
 
 export interface ZohoComment {
@@ -178,6 +159,8 @@ export interface ZohoComment {
   created_time: string;
   added_by: string;
   last_modified_time?: string;
+  source_type?: 'task' | 'issue';
+  source_id?: string;
 }
 
 export interface ZohoAPIResponse<T> {
@@ -186,25 +169,42 @@ export interface ZohoAPIResponse<T> {
   message?: string;
 }
 
-export enum ItemType {
-  USERS = 'users',
-  TASKS = 'tasks',
-  ISSUES = 'issues',
-  COMMENTS = 'comments',
+export interface PagedResponse<T> {
+  data: T[];
+  lastPage: number;
 }
 
-export interface ItemTypeToExtract {
-  name: ItemType;
-  normalize: (item: any) => any;
+export interface CreateCommentParams {
+  content: string;
 }
 
-export interface ExtractorState {
-  [ItemType.USERS]: { complete: boolean; page: number };
-  [ItemType.TASKS]: { complete: boolean; page: number };
-  [ItemType.ISSUES]: { complete: boolean; page: number };
-  [ItemType.COMMENTS]: { complete: boolean; page: number };
-  lastSyncStarted: string;
-  lastSuccessfulSyncStarted: string;
-  extractedTasks: string[];
-  extractedIssues: string[];
+export interface UpdateCommentParams {
+  content: string;
+}
+
+export interface CreateTaskParams {
+  name: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+}
+
+export interface UpdateTaskParams {
+  name?: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+}
+
+export interface CreateIssueParams {
+  title: string;
+  description?: string;
+  severity?: string;
+}
+
+export interface UpdateIssueParams {
+  title?: string;
+  description?: string;
+  status?: string;
+  severity?: string;
 }
