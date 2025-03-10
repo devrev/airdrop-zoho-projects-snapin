@@ -7,16 +7,9 @@ service_account:
   display_name: Airdrop Zoho Projects Snapin Bot
 
 developer_keyrings:
-  - name: github_access_token
-    description: GitHub access token
-    display_name: GitHub Access Token
-
-build_config:
-  environment_variables:
-    - name: GITHUB_ACCESS_TOKEN
-      description: Token to access GitHub packages
-      type: keyring
-      value: github_access_token
+  - name: zoho-projects-oauth-secret
+    description: Zoho Projects OAuth secret
+    display_name: Zoho Projects OAuth Secret
 
 functions:
   - name: extraction
@@ -25,17 +18,54 @@ functions:
     description: Create blueprint and install initial domain mapping
 
 keyring_types:
-  - id: example-connection
-    name: Example Connection
-    description: Example Connection
-    kind: "Secret"
+  - id: zoho-projects-oauth-connection
+    name: "Zoho Projects Connection"
+    description: "Zoho Projects OAuth connection"
+    kind: "Oauth2"
     is_subdomain: true
-    secret_config:
-      secret_transform: ".token" # a JQ query
-      fields:
-        - id: token
-          name: Token
-          description: Example API token
+    external_system_name: Zoho Projects
+    scopes:
+      - name: projects
+        description: Access to projects
+        value: "ZohoProjects.portals.READ"
+      - name: projects
+        description: Access to projects
+        value: "ZohoProjects.projects.ALL"
+      - name: issues
+        description: Access to projects
+        value: "ZohoProjects.bugs.ALL"
+      - name: tasks
+        description: Access to tasks
+        value: "ZohoProjects.tasks.ALL"
+      - name: users
+        description: Access to users
+        value: "ZohoProjects.users.ALL"
+    scope_delimiter: ","
+    oauth_secret: zoho-projects-oauth-secret
+    authorize:
+      type: "config"
+      auth_url: "https://accounts.[SUBDOMAIN].com/oauth/v2/auth"
+      token_url: "https://accounts.[SUBDOMAIN].com/oauth/v2/token"
+      grant_type: "authorization_code"
+      auth_query_parameters:
+        "client_id": "[CLIENT_ID]"
+        "scope": "[SCOPES]"
+        "response_type": "code"
+        "access_type": "offline"
+      token_query_parameters:
+        "client_id": "[CLIENT_ID]"
+        "client_secret": "[CLIENT_SECRET]"
+    refresh:
+      type: "config"
+      url: "https://accounts.zoho.com/oauth/v2/token"
+      method: "POST"
+      query_parameters:
+        "client_id": "[CLIENT_ID]"
+        "client_secret": "[CLIENT_SECRET]"
+        "refresh_token": "[REFRESH_TOKEN]"
+        "grant_type": "refresh_token"
+      headers:
+        "Content-type": "application/x-www-form-urlencoded"
 
 imports:
   - slug: airdrop-zoho-projects-snapin-extractor
@@ -43,7 +73,7 @@ imports:
     description: Airdrop Zoho Projects Snapin
     extractor_function: extraction
     allowed_connection_types:
-      - example-connection
+      - zoho-projects-oauth-connection
 
 hooks:
   - type: activate

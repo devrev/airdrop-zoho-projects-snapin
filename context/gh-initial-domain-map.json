@@ -1,0 +1,359 @@
+{
+    "additional_mappings": {
+        "record_type_mappings": {
+            "assignees": {
+                "default_mapping": {
+                    "object_type": "devu"
+                },
+                "possible_record_type_mappings": [
+                    {
+                        "devrev_leaf_type": "devu",
+                        "forward": true,
+                        "reverse": false,
+                        "shard": {
+                            "constructed_custom_fields": {},
+                            "devrev_leaf_type": {
+                                "object_type": "devu"
+                            },
+                            "mode": "create_shard",
+                            "stock_field_mappings": {
+                                "display_name": {
+                                    "forward": true,
+                                    "primary_external_field": "user_id",
+                                    "reverse": false,
+                                    "transformation_method": {
+                                        "transformation_method": "use_directly"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ]
+            },
+            "comments": {
+                "default_mapping": {
+                    "object_type": "comment"
+                },
+                "possible_record_type_mappings": [
+                    {
+                        "devrev_leaf_type": "comment",
+                        "forward": true,
+                        "reverse": true,
+                        "shard": {
+                            "constructed_custom_fields": {},
+                            "devrev_leaf_type": {
+                                "object_type": "comment"
+                            },
+                            "mode": "create_shard",
+                            "stock_field_mappings": {
+                                "body": {
+                                    "forward": true,
+                                    "primary_external_field": "body",
+                                    "reverse": true,
+                                    "transformation_method": {
+                                        "transformation_method": "use_rich_text"
+                                    }
+                                },
+                                "created_by_id": {
+                                    "forward": true,
+                                    "primary_external_field": "user_id",
+                                    "reverse": true,
+                                    "transformation_method": {
+                                        "transformation_method": "use_directly"
+                                    }
+                                },
+                                "modified_by_id": {
+                                    "forward": true,
+                                    "primary_external_field": "user_id",
+                                    "reverse": false,
+                                    "transformation_method": {
+                                        "transformation_method": "use_directly"
+                                    }
+                                },
+                                "parent_object_id": {
+                                    "forward": true,
+                                    "primary_external_field": "issue_url",
+                                    "reverse": true,
+                                    "transformation_method": {
+                                        "transformation_method": "use_directly"
+                                    }
+                                },
+                                "visibility": {
+                                    "forward": true,
+                                    "reverse": false,
+                                    "transformation_method": {
+                                        "enum": "Visibility_INTERNAL",
+                                        "transformation_method": "use_fixed_value",
+                                        "value": "enum_value"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ]
+            },
+            "issues": {
+                "default_mapping": {
+                    "object_type": "issue"
+                },
+                "possible_record_type_mappings": [
+                    {
+                        "devrev_leaf_type": "issue",
+                        "forward": true,
+                        "reverse": true,
+                        "shard": {
+                            "constructed_custom_fields": {
+                                "ext_object_type": {
+                                    "field_descriptor": {
+                                        "allowed_values": [
+                                            "Issues"
+                                        ],
+                                        "db_name": "ext_object_type",
+                                        "default_value": "Issues",
+                                        "description": "The source object type/subtype that the item was created from.",
+                                        "field_type": "enum",
+                                        "is_filterable": true,
+                                        "is_required": true,
+                                        "name": "ext_object_type",
+                                        "ui": {
+                                            "display_name": "External Object Type",
+                                            "is_hidden_during_create": true,
+                                            "is_read_only": true
+                                        }
+                                    },
+                                    "transformation_method": {
+                                        "can_apply_to_null": false,
+                                        "custom_field_type": {
+                                            "allowed_values": [
+                                                "Issues"
+                                            ],
+                                            "db_name": "dummy name",
+                                            "field_type": "enum",
+                                            "name": "dummy name"
+                                        },
+                                        "forward_jq": "\"Issues\"",
+                                        "transformation_method": "use_raw_jq",
+                                        "use_primary_input": false
+                                    }
+                                }
+                            },
+                            "devrev_leaf_type": {
+                                "object_type": "issue"
+                            },
+                            "mode": "create_shard",
+                            "stock_field_mappings": {
+                                "actual_close_date": {
+                                    "forward": true,
+                                    "primary_external_field": "closed_at",
+                                    "reverse": true,
+                                    "transformation_method": {
+                                        "transformation_method": "use_directly"
+                                    }
+                                },
+                                "applies_to_part_id": {
+                                    "forward": true,
+                                    "reverse": false,
+                                    "transformation_method": {
+                                        "is_array": false,
+                                        "leaf_type": {
+                                            "object_type": "product"
+                                        },
+                                        "transformation_method": "use_devrev_record"
+                                    }
+                                },
+                                "body": {
+                                    "forward": true,
+                                    "primary_external_field": "body",
+                                    "reverse": true,
+                                    "transformation_method": {
+                                        "transformation_method": "use_rich_text"
+                                    }
+                                },
+                                "created_by_id": {
+                                    "forward": true,
+                                    "primary_external_field": "created_by",
+                                    "reverse": true,
+                                    "transformation_method": {
+                                        "transformation_method": "use_directly"
+                                    }
+                                },
+                                "item_url_field": {
+                                    "forward": true,
+                                    "primary_external_field": "html_url",
+                                    "reverse": false,
+                                    "transformation_method": {
+                                        "transformation_method": "use_directly"
+                                    }
+                                },
+                                "owned_by_ids": {
+                                    "forward": true,
+                                    "primary_external_field": "assignees",
+                                    "reverse": true,
+                                    "transformation_method": {
+                                        "transformation_method": "use_directly"
+                                    }
+                                },
+                                "priority": {
+                                    "forward": true,
+                                    "reverse": false,
+                                    "transformation_method": {
+                                        "enum": "P1",
+                                        "transformation_method": "use_fixed_value",
+                                        "value": "enum_value"
+                                    }
+                                },
+                                "stage": {
+                                    "forward": true,
+                                    "primary_external_field": "state",
+                                    "reverse": true,
+                                    "transformation_method": {
+                                        "forward": {
+                                            "closed": {
+                                                "value": "completed"
+                                            },
+                                            "open": {
+                                                "value": "triage"
+                                            }
+                                        },
+                                        "is_array": false,
+                                        "reverse": {
+                                            "backlog": {
+                                                "value": "open"
+                                            },
+                                            "completed": {
+                                                "value": "closed"
+                                            },
+                                            "duplicate": {
+                                                "value": "closed"
+                                            },
+                                            "in_deployment": {
+                                                "value": "open"
+                                            },
+                                            "in_development": {
+                                                "value": "open"
+                                            },
+                                            "in_review": {
+                                                "value": "open"
+                                            },
+                                            "in_testing": {
+                                                "value": "open"
+                                            },
+                                            "prioritized": {
+                                                "value": "open"
+                                            },
+                                            "triage": {
+                                                "value": "open"
+                                            },
+                                            "wont_fix": {
+                                                "value": "closed"
+                                            }
+                                        },
+                                        "transformation_method": "map_enum"
+                                    }
+                                },
+                                "tags": {
+                                    "forward": true,
+                                    "primary_external_field": "labels",
+                                    "reverse": true,
+                                    "transformation_method": {
+                                        "transformation_method": "use_directly"
+                                    }
+                                },
+                                "title": {
+                                    "forward": true,
+                                    "primary_external_field": "title",
+                                    "reverse": true,
+                                    "transformation_method": {
+                                        "transformation_method": "use_directly"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ]
+            },
+            "labels": {
+                "default_mapping": {
+                    "object_type": "tag"
+                },
+                "possible_record_type_mappings": [
+                    {
+                        "devrev_leaf_type": "tag",
+                        "forward": true,
+                        "reverse": false,
+                        "shard": {
+                            "constructed_custom_fields": {},
+                            "devrev_leaf_type": {
+                                "object_type": "tag"
+                            },
+                            "mode": "create_shard",
+                            "stock_field_mappings": {
+                                "description": {
+                                    "forward": true,
+                                    "primary_external_field": "description",
+                                    "reverse": false,
+                                    "transformation_method": {
+                                        "transformation_method": "use_directly"
+                                    }
+                                },
+                                "name": {
+                                    "forward": true,
+                                    "primary_external_field": "name",
+                                    "reverse": false,
+                                    "transformation_method": {
+                                        "transformation_method": "use_directly"
+                                    }
+                                },
+                                "style": {
+                                    "forward": true,
+                                    "primary_external_field": "color",
+                                    "reverse": false,
+                                    "transformation_method": {
+                                        "transformation_method": "use_directly"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ]
+            },
+            "users": {
+                "default_mapping": {
+                    "object_type": "devu"
+                },
+                "possible_record_type_mappings": [
+                    {
+                        "devrev_leaf_type": "devu",
+                        "forward": true,
+                        "reverse": false,
+                        "shard": {
+                            "constructed_custom_fields": {},
+                            "devrev_leaf_type": {
+                                "object_type": "devu"
+                            },
+                            "mode": "create_shard",
+                            "stock_field_mappings": {
+                                "display_name": {
+                                    "forward": true,
+                                    "primary_external_field": "login",
+                                    "reverse": false,
+                                    "transformation_method": {
+                                        "transformation_method": "use_directly"
+                                    }
+                                },
+                                "full_name": {
+                                    "forward": true,
+                                    "primary_external_field": "login",
+                                    "reverse": false,
+                                    "transformation_method": {
+                                        "transformation_method": "use_directly"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    }
+}
