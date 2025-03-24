@@ -1,9 +1,32 @@
 import { NormalizedItem, RepoInterface } from '@devrev/ts-adaas';
 import { AxiosError } from 'axios';
-import { normalizeComment, normalizeIssue, normalizeTask, normalizeUser } from './data-normalization';
-import { ExtractorState, ItemType } from './types';
+import {
+  normalizeIssue,
+  normalizeIssueComment,
+  normalizeTask,
+  normalizeTaskComment,
+  normalizeUser,
+} from './data-normalization';
+import { ExtractorState, ItemType, ItemTypeExtractFunction, ItemTypeToExtract } from './types';
 
 export const DEFAULT_DATE = '1970-01-01T00:00:00Z';
+
+export function getItemTypesToExtract(): ItemTypeToExtract[] {
+  return [
+    {
+      name: ItemType.USERS,
+      functionName: ItemTypeExtractFunction.GET_USERS,
+    },
+    {
+      name: ItemType.TASKS,
+      functionName: ItemTypeExtractFunction.GET_TASKS,
+    },
+    {
+      name: ItemType.ISSUES,
+      functionName: ItemTypeExtractFunction.GET_ISSUES,
+    },
+  ];
+}
 
 export class ZohoError extends Error {
   constructor(message: string) {
@@ -12,11 +35,11 @@ export class ZohoError extends Error {
   }
 }
 
-export class ZohoRateLimitError extends ZohoError {
+export class ZohoRateLimitError extends Error {
   delay: number;
 
   constructor(delay: number) {
-    super('Rate limit exceeded');
+    super(`Rate limit reached. Reset in ${delay} milliseconds.`);
     this.name = 'ZohoRateLimitError';
     this.delay = delay;
   }
@@ -48,8 +71,12 @@ export const repos: RepoInterface[] = [
     normalize: normalizeIssue as (record: object) => NormalizedItem,
   },
   {
-    itemType: ItemType.COMMENTS,
-    normalize: normalizeComment as (record: object) => NormalizedItem,
+    itemType: ItemType.TASK_COMMENTS,
+    normalize: normalizeTaskComment as (record: object) => NormalizedItem,
+  },
+  {
+    itemType: ItemType.ISSUE_COMMENTS,
+    normalize: normalizeIssueComment as (record: object) => NormalizedItem,
   },
 ];
 
@@ -66,7 +93,11 @@ export const initialState: ExtractorState = {
     complete: false,
     page: 1,
   },
-  comments: {
+  task_comments: {
+    complete: false,
+    page: 1,
+  },
+  issue_comments: {
     complete: false,
     page: 1,
   },

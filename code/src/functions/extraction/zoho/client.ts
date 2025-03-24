@@ -91,10 +91,13 @@ export class ZohoClient {
   //   }
   // }
 
-  async getUsers(portalId: string, projectId: string): Promise<{ users: ZohoUser[] }> {
+  async getUsers(portalId: string, projectId: string): Promise<ZohoAPIResponse<{ users: ZohoUser[] }>> {
     try {
       const response = await this.client.get(`/portal/${portalId}/projects/${projectId}/users/`);
-      return response.data;
+      return {
+        data: response.data,
+        status: response.status,
+      };
     } catch (error) {
       if (error instanceof Error) {
         throw handleZohoError(error as AxiosError);

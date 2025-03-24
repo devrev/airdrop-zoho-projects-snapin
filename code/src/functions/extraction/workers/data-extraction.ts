@@ -11,7 +11,6 @@ processTask<ExtractorState>({
   task: async ({ adapter }) => {
     adapter.initializeRepos(repos);
 
-    // Initialize arrays for storing extracted task and issue IDs
     adapter.state.extractedTasks = [];
     adapter.state.extractedIssues = [];
 
@@ -71,7 +70,7 @@ async function extractList(
     switch (itemType) {
       case ItemType.USERS:
         const usersResponse = await client.getUsers(PORTAL_ID, PROJECT_ID);
-        items = usersResponse.users;
+        items = usersResponse.data.users;
         break;
       case ItemType.TASKS:
         const tasksResponse = await client.getTasks(PORTAL_ID, PROJECT_ID);
@@ -156,10 +155,9 @@ async function extractComments(adapter: WorkerAdapter<ExtractorState>, client: Z
       if (response.data?.comments?.length > 0) {
         const comments = response.data.comments.map((comment) => ({
           ...comment,
-          source_type: 'task',
-          source_id: taskId,
+          parent_Task_Id: taskId, // Just pass the ID, EDM handles the reference structure
         }));
-        await adapter.getRepo(ItemType.COMMENTS)?.push(comments);
+        await adapter.getRepo(ItemType.TASK_COMMENTS)?.push(comments);
       }
     } catch (error) {
       if (error instanceof ZohoRateLimitError) {
@@ -187,10 +185,9 @@ async function extractComments(adapter: WorkerAdapter<ExtractorState>, client: Z
       if (response.data?.comments?.length > 0) {
         const comments = response.data.comments.map((comment) => ({
           ...comment,
-          source_type: 'issue',
-          source_id: issueId,
+          parent_Issue_Id: issueId, // Just pass the ID, EDM handles the reference structure
         }));
-        await adapter.getRepo(ItemType.COMMENTS)?.push(comments);
+        await adapter.getRepo(ItemType.ISSUE_COMMENTS)?.push(comments);
       }
     } catch (error) {
       if (error instanceof ZohoRateLimitError) {
