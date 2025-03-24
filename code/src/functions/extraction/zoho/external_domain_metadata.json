@@ -3,17 +3,14 @@
   "record_types": {
     "issues": {
       "name": "Issues",
-      "is_loadable": true,
       "fields": {
         "id": {
           "type": "text",
-          "name": "Issue ID",
-          "is_required": true
+          "name": "Issue ID"
         },
         "title": {
           "type": "text",
-          "name": "Title",
-          "is_required": true
+          "name": "Title"
         },
         "description": {
           "type": "rich_text",
@@ -26,7 +23,6 @@
         "status": {
           "type": "enum",
           "name": "Status",
-          "is_required": true,
           "enum": {
             "values": [
               {
@@ -38,15 +34,6 @@
                 "name": "Closed"
               }
             ]
-          }
-        },
-        "severity": {
-          "type": "reference",
-          "name": "Severity",
-          "reference": {
-            "refers_to": {
-              "#record:severity": {}
-            }
           }
         },
         "assignee": {
@@ -61,7 +48,6 @@
         "reporter": {
           "type": "reference",
           "name": "Reporter",
-          "is_required": true,
           "reference": {
             "refers_to": {
               "#record:users": {}
@@ -92,30 +78,33 @@
     },
     "tasks": {
       "name": "Tasks",
-      "is_loadable": true,
       "fields": {
         "id": {
           "type": "text",
-          "name": "Task ID",
-          "is_required": true
+          "name": "Task ID"
         },
         "name": {
           "type": "text",
-          "name": "Task Name",
-          "is_required": true
+          "name": "Task Name"
         },
         "description": {
           "type": "rich_text",
           "name": "Description"
         },
         "status": {
-          "type": "reference",
+          "type": "enum",
           "name": "Status",
-          "is_required": true,
-          "reference": {
-            "refers_to": {
-              "#record:task_status": {}
-            }
+          "enum": {
+            "values": [
+              {
+                "key": "open",
+                "name": "Open"
+              },
+              {
+                "key": "closed",
+                "name": "Closed"
+              }
+            ]
           }
         },
         "priority": {
@@ -164,22 +153,18 @@
     },
     "users": {
       "name": "Users",
-      "is_loadable": true,
       "fields": {
         "id": {
           "type": "text",
-          "name": "User ID",
-          "is_required": true
+          "name": "User ID"
         },
         "name": {
           "type": "text",
-          "name": "Name",
-          "is_required": true
+          "name": "Name"
         },
         "email": {
           "type": "text",
-          "name": "Email",
-          "is_required": true
+          "name": "Email"
         },
         "role": {
           "type": "text",
@@ -195,51 +180,34 @@
         }
       }
     },
-    "comments": {
-      "name": "Comments",
-      "is_loadable": true,
+    "issue_comments": {
+      "name": "Issue Comments",
       "fields": {
         "id": {
           "type": "text",
-          "name": "Comment ID",
-          "is_required": true
+          "name": "Comment ID"
         },
         "content": {
           "type": "rich_text",
-          "name": "Content",
-          "is_required": true
+          "name": "Content"
         },
         "added_by": {
           "type": "reference",
           "name": "Added By",
-          "is_required": true,
           "reference": {
             "refers_to": {
               "#record:users": {}
             }
           }
         },
-        "parent_type": {
-          "type": "enum",
-          "name": "Parent Type",
-          "is_required": true,
-          "enum": {
-            "values": [
-              {
-                "key": "issue",
-                "name": "Issue"
-              },
-              {
-                "key": "task",
-                "name": "Task"
-              }
-            ]
+        "parent_Issue_Id": {
+          "type": "reference",
+          "name": "Parent Issue",
+          "reference": {
+            "refers_to": {
+              "#record:issues": {}
+            }
           }
-        },
-        "parent_id": {
-          "type": "text",
-          "name": "Parent ID",
-          "is_required": true
         },
         "created_time": {
           "type": "timestamp",
@@ -251,44 +219,42 @@
         }
       }
     },
-    "severity": {
-      "name": "Severity",
-      "is_loadable": true,
+    "task_comments": {
+      "name": "Task Comments",
       "fields": {
         "id": {
           "type": "text",
-          "name": "Severity ID",
-          "is_required": true
+          "name": "Comment ID"
         },
-        "type": {
-          "type": "text",
-          "name": "Type",
-          "is_required": true
-        }
-      }
-    },
-    "task_status": {
-      "name": "Task Status",
-      "is_loadable": true,
-      "fields": {
-        "id": {
-          "type": "text",
-          "name": "Status ID",
-          "is_required": true
+        "content": {
+          "type": "rich_text",
+          "name": "Content"
         },
-        "name": {
-          "type": "text",
-          "name": "Name",
-          "is_required": true
+        "added_by": {
+          "type": "reference",
+          "name": "Added By",
+          "reference": {
+            "refers_to": {
+              "#record:users": {}
+            }
+          }
         },
-        "type": {
-          "type": "text",
-          "name": "Type",
-          "is_required": true
+        "parent_Task_Id": {
+          "type": "reference",
+          "name": "Parent Task",
+          "reference": {
+            "refers_to": {
+              "#record:tasks": {}
+            }
+          }
         },
-        "color_code": {
-          "type": "text",
-          "name": "Color Code"
+        "created_time": {
+          "type": "timestamp",
+          "name": "Created Time"
+        },
+        "updated_time": {
+          "type": "timestamp",
+          "name": "Updated Time"
         }
       }
     }

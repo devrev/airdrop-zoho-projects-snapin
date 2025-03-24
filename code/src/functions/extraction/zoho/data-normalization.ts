@@ -14,8 +14,8 @@ function transformHtmlContent(content: string | null): string | null {
 export function normalizeUser(user: ZohoUser): NormalizedItem {
   return {
     id: user.id,
-    created_date: DEFAULT_DATE,
-    modified_date: DEFAULT_DATE,
+    created_date: new Date(DEFAULT_DATE).toISOString(),
+    modified_date: new Date(DEFAULT_DATE).toISOString(),
     data: {
       name: user.name,
       email: user.email,
@@ -29,25 +29,28 @@ export function normalizeUser(user: ZohoUser): NormalizedItem {
 export function normalizeTask(task: ZohoTask): NormalizedItem {
   return {
     id: String(task.id_string),
-    created_date: task.created_time || DEFAULT_DATE,
-    modified_date: task.last_updated_time || DEFAULT_DATE,
+    created_date: new Date(task.created_time || DEFAULT_DATE).toISOString(),
+    modified_date: new Date(task.last_updated_time || DEFAULT_DATE).toISOString(),
     data: {
       name: task.name,
       description: [transformHtmlContent(task.description)],
       status: task.status.type,
-      status_id: task.status.id,
       priority: task.priority,
       created_by: task.created_by,
       percent_complete: task.percent_complete,
+      completed: task.completed,
+      start_date: task.start_date ? new Date(task.start_date).toISOString() : null,
+      end_date: task.end_date ? new Date(task.end_date).toISOString() : null,
+      html_url: task.link?.web?.url || null,
     },
   };
 }
 
 export function normalizeIssue(issue: ZohoIssue): NormalizedItem {
   return {
-    id: issue.id,
-    created_date: issue.created_time || DEFAULT_DATE,
-    modified_date: issue.updated_time || DEFAULT_DATE,
+    id: String(issue.id),
+    created_date: new Date(issue.created_time || DEFAULT_DATE).toISOString(),
+    modified_date: new Date(issue.updated_time || DEFAULT_DATE).toISOString(),
     data: {
       title: issue.title,
       description: [transformHtmlContent(issue.description)],
@@ -59,14 +62,32 @@ export function normalizeIssue(issue: ZohoIssue): NormalizedItem {
   };
 }
 
-export function normalizeComment(comment: ZohoComment): NormalizedItem {
+export function normalizeIssueComment(comment: ZohoComment): NormalizedItem {
   return {
-    id: comment.id,
+    id: String(comment.id),
     created_date: comment.created_time || DEFAULT_DATE,
-    modified_date: comment.last_modified_time || comment.created_time || DEFAULT_DATE,
+    modified_date: comment.updated_time || comment.created_time || DEFAULT_DATE,
     data: {
-      content: [transformHtmlContent(comment.content)],
+      content: transformHtmlContent(comment.content) || '',
       added_by: comment.added_by,
+      parent_Issue_Id: comment.parent_Issue_Id,
+      created_time: comment.created_time || DEFAULT_DATE,
+      updated_time: comment.updated_time || comment.created_time || DEFAULT_DATE,
+    },
+  };
+}
+
+export function normalizeTaskComment(comment: ZohoComment): NormalizedItem {
+  return {
+    id: String(comment.id),
+    created_date: comment.created_time || DEFAULT_DATE,
+    modified_date: comment.updated_time || comment.created_time || DEFAULT_DATE,
+    data: {
+      content: transformHtmlContent(comment.content) || '',
+      added_by: comment.added_by,
+      parent_Task_Id: comment.parent_Task_Id,
+      created_time: comment.created_time || DEFAULT_DATE,
+      updated_time: comment.updated_time || comment.created_time || DEFAULT_DATE,
     },
   };
 }

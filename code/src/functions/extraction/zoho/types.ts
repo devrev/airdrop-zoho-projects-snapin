@@ -2,14 +2,14 @@ export enum ItemType {
   USERS = 'users',
   TASKS = 'tasks',
   ISSUES = 'issues',
-  COMMENTS = 'comments',
+  TASK_COMMENTS = 'task_comments',
+  ISSUE_COMMENTS = 'issue_comments',
 }
 
 export enum ItemTypeExtractFunction {
   GET_USERS = 'getUsers',
   GET_TASKS = 'getTasks',
   GET_ISSUES = 'getIssues',
-  GET_COMMENTS = 'getComments',
 }
 
 export interface ItemTypeToExtract {
@@ -26,7 +26,8 @@ export interface ExtractorState {
   [ItemType.USERS]: ExtractorStateBase;
   [ItemType.TASKS]: ExtractorStateBase;
   [ItemType.ISSUES]: ExtractorStateBase;
-  [ItemType.COMMENTS]: ExtractorStateBase;
+  [ItemType.TASK_COMMENTS]: ExtractorStateBase;
+  [ItemType.ISSUE_COMMENTS]: ExtractorStateBase;
   extractedTasks: string[];
   extractedIssues: string[];
   lastSyncStarted: string;
@@ -131,7 +132,7 @@ export interface ZohoTaskLogHours {
 }
 
 export interface ZohoTask {
-  id: string | number;
+  id: string;
   id_string: string;
   name: string;
   description: string;
@@ -157,10 +158,22 @@ export interface ZohoComment {
   id: string;
   content: string;
   created_time: string;
+  updated_time?: string;
   added_by: string;
-  last_modified_time?: string;
-  source_type?: 'task' | 'issue';
-  source_id?: string;
+  parent_Issue_Id ?: {
+    reference: {
+      refers_to: {
+        '#record:issues': string;
+      };
+    };
+  };
+  parent_Task_Id?: {
+    reference: {
+      refers_to: {
+        '#record:tasks': string;
+      };
+    };
+  };
 }
 
 export interface ZohoAPIResponse<T> {
