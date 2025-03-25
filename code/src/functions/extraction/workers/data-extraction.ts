@@ -1,103 +1,29 @@
-import { EventType, ExtractorEventType, processTask } from '@devrev/ts-adaas';
+import { ExtractorEventType, processTask, SyncMode, WorkerAdapter } from '@devrev/ts-adaas';
+import { ZohoClient } from '../zoho/client';
+import { repos, ZohoRateLimitError } from '../zoho/helper';
+import { ExtractorState, ItemType, ZohoIssue, ZohoTask, ZohoUser } from '../zoho/types';
 
-import { normalizeAttachment, normalizeIssue, normalizeUser } from '../dummy-extractor/data-normalization';
+const itemTypesToExtract = [ItemType.USERS, ItemType.TASKS, ItemType.ISSUES];
 
-// Dummy data that originally would be fetched from an external source
-const issues = [
-  {
-    id: 'issue-1',
-    created_date: '1999-12-25T01:00:03+01:00',
-    modified_date: '1999-12-25T01:00:03+01:00',
-    body: '<p>This is issue 1</p>',
-    creator: 'user-1',
-    owner: 'user-1',
-    title: 'Issue 1',
-  },
-  {
-    id: 'issue-2',
-    created_date: '1999-12-27T15:31:34+01:00',
-    modified_date: '2002-04-09T01:55:31+02:00',
-    body: '<p>This is issue 2</p>',
-    creator: 'user-2',
-    owner: 'user-2',
-    title: 'Issue 2',
-  },
-];
-
-const users = [
-  {
-    id: 'user-1',
-    created_date: '1999-12-25T01:00:03+01:00',
-    modified_date: '1999-12-25T01:00:03+01:00',
-    data: {
-      email: 'johndoe@test.com',
-      name: 'John Doe',
-    },
-  },
-  {
-    id: 'user-2',
-    created_date: '1999-12-27T15:31:34+01:00',
-    modified_date: '2002-04-09T01:55:31+02:00',
-    data: {
-      email: 'janedoe@test.com',
-      name: 'Jane Doe',
-    },
-  },
-];
-
-const attachments = [
-  {
-    url: 'https://app.dev.devrev-eng.ai/favicon.ico',
-    id: 'attachment-1',
-    file_name: 'dummy.jpg',
-    author_id: 'user-1',
-    parent_id: 'issue-1',
-  },
-  {
-    url: 'https://app.dev.devrev-eng.ai/favicon.ico',
-    id: 'attachment-2',
-    file_name: 'dummy.ico',
-    author_id: 'user-2',
-    parent_id: 'issue-2',
-  },
-];
-
-const repos = [
-  {
-    itemType: 'issues',
-    normalize: normalizeIssue,
-  },
-  {
-    itemType: 'users',
-    normalize: normalizeUser,
-  },
-  {
-    itemType: 'attachments',
-    normalize: normalizeAttachment,
-  },
-];
-
-processTask({
+processTask<ExtractorState>({
   task: async ({ adapter }) => {
     adapter.initializeRepos(repos);
-<<<<<<< Updated upstream
-    if (adapter.event.payload.event_type === EventType.ExtractionDataStart) {
-      await adapter.getRepo('issues')?.push(issues);
-      await adapter.emit(ExtractorEventType.ExtractionDataProgress, {
-        progress: 50,
-      });
-    } else {
-      await adapter.getRepo('users')?.push(users);
-      await adapter.getRepo('attachments')?.push(attachments);
-      await adapter.emit(ExtractorEventType.ExtractionDataDone, {
-        progress: 100,
-      });
-=======
 
     adapter.state.extractedTasks = [];
     adapter.state.extractedIssues = [];
 
     let stop = false;
+
+    const [portalId, projectId] = adapter.event.payload?.event_context?.external_sync_unit_id?.split(':') || [];
+
+    if (!portalId || !projectId) {
+      await adapter.emit(ExtractorEventType.ExtractionDataError, {
+        error: {
+          message: 'Portal ID or Project ID is missing in the event context.',
+        },
+      });
+      return;
+    }
 
     if (adapter.event.payload.event_context.mode === SyncMode.INCREMENTAL) {
       adapter.state.lastSyncStarted = new Date().toISOString();
@@ -112,8 +38,8 @@ processTask({
 
     const client = new ZohoClient({
       accessToken: adapter.event.payload.connection_data.key,
-      portalId: PORTAL_ID,
-      projectId: PROJECT_ID,
+      portalId,
+      projectId,
     });
 
     for (const itemType of itemTypesToExtract) {
@@ -130,7 +56,6 @@ processTask({
 
     if (!stop) {
       await adapter.emit(ExtractorEventType.ExtractionDataDone);
->>>>>>> Stashed changes
     }
   },
   onTimeout: async ({ adapter }) => {
@@ -140,8 +65,6 @@ processTask({
     });
   },
 });
-<<<<<<< Updated upstream
-=======
 
 async function extractList(
   adapter: WorkerAdapter<ExtractorState>,
@@ -155,15 +78,15 @@ async function extractList(
 
     switch (itemType) {
       case ItemType.USERS:
-        const usersResponse = await client.getUsers(PORTAL_ID, PROJECT_ID);
+        const usersResponse = await client.getUsers(client.portalId, client.projectId);
         items = usersResponse.data.users;
         break;
       case ItemType.TASKS:
-        const tasksResponse = await client.getTasks(PORTAL_ID, PROJECT_ID);
+        const tasksResponse = await client.getTasks(client.portalId, client.projectId);
         items = tasksResponse.data.tasks;
         break;
       case ItemType.ISSUES:
-        const issuesResponse = await client.getIssues(PORTAL_ID, PROJECT_ID);
+        const issuesResponse = await client.getIssues(client.portalId, client.projectId);
         items = issuesResponse.data.issues;
         break;
       default:
@@ -231,23 +154,22 @@ async function extractComments(adapter: WorkerAdapter<ExtractorState>, client: Z
   console.log('Extracting comments');
 
   // Extract task comments
-  const taskIds = [...adapter.state.extractedTasks]; // Create a copy of task IDs
-  adapter.state.extractedTasks = []; // Clear the original array immediately
+  const taskIds = [...adapter.state.extractedTasks];
+  adapter.state.extractedTasks = [];
 
   for (const taskId of taskIds) {
     try {
       console.log('Fetching comments for task:', taskId);
-      const response = await client.getTaskComments(PORTAL_ID, PROJECT_ID, taskId);
+      const response = await client.getTaskComments(client.portalId, client.projectId, taskId);
       if (response.data?.comments?.length > 0) {
         const comments = response.data.comments.map((comment) => ({
           ...comment,
-          parent_Task_Id: taskId, // Just pass the ID, EDM handles the reference structure
+          parent_Task_Id: taskId,
         }));
         await adapter.getRepo(ItemType.TASK_COMMENTS)?.push(comments);
       }
     } catch (error) {
       if (error instanceof ZohoRateLimitError) {
-        // Put remaining tasks back in the queue
         adapter.state.extractedTasks.push(...taskIds.slice(taskIds.indexOf(taskId)));
         console.log(`Rate limit reached. Reset in ${error.delay} milliseconds`);
         await adapter.emit(ExtractorEventType.ExtractionDataDelay, {
@@ -256,28 +178,26 @@ async function extractComments(adapter: WorkerAdapter<ExtractorState>, client: Z
         return true;
       }
       console.error(`Error fetching comments for task ${taskId}:`, error);
-      // Continue with next task on error
     }
   }
 
   // Extract issue comments
-  const issueIds = [...adapter.state.extractedIssues]; // Create a copy of issue IDs
-  adapter.state.extractedIssues = []; // Clear the original array immediately
+  const issueIds = [...adapter.state.extractedIssues];
+  adapter.state.extractedIssues = [];
 
   for (const issueId of issueIds) {
     try {
       console.log('Fetching comments for issue:', issueId);
-      const response = await client.getIssueComments(PORTAL_ID, PROJECT_ID, issueId);
+      const response = await client.getIssueComments(client.portalId, client.projectId, issueId);
       if (response.data?.comments?.length > 0) {
         const comments = response.data.comments.map((comment) => ({
           ...comment,
-          parent_Issue_Id: issueId, // Just pass the ID, EDM handles the reference structure
+          parent_Issue_Id: issueId,
         }));
         await adapter.getRepo(ItemType.ISSUE_COMMENTS)?.push(comments);
       }
     } catch (error) {
       if (error instanceof ZohoRateLimitError) {
-        // Put remaining issues back in the queue
         adapter.state.extractedIssues.push(...issueIds.slice(issueIds.indexOf(issueId)));
         console.log(`Rate limit reached. Reset in ${error.delay} milliseconds`);
         await adapter.emit(ExtractorEventType.ExtractionDataDelay, {
@@ -286,10 +206,8 @@ async function extractComments(adapter: WorkerAdapter<ExtractorState>, client: Z
         return true;
       }
       console.error(`Error fetching comments for issue ${issueId}:`, error);
-      // Continue with next issue on error
     }
   }
 
-  return false; // Changed to false since we've processed everything successfully
+  return false;
 }
->>>>>>> Stashed changes

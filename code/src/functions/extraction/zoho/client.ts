@@ -52,44 +52,73 @@ export class ZohoClient {
   private config: ZohoConfig;
 
   constructor(config: ZohoConfig) {
-    this.config = config;
-    console.log('limbo access token:', config.accessToken);
+    this.config = {
+      ...config,
+      baseUrl: config.baseUrl || ZOHO_API_BASE,
+    };
+
     this.client = axios.create({
-      baseURL: config.baseUrl || ZOHO_API_BASE,
+      baseURL: this.config.baseUrl,
       headers: {
-        Authorization: `Zoho-oauthtoken ${config.accessToken}`,
+        Authorization: `Bearer ${this.config.accessToken}`,
         'Content-Type': 'application/json',
       },
     });
   }
 
-  // async getPortals(): Promise<ZohoAPIResponse<{ portals: ZohoPortal[] }>> {
-  //   try {
-  //     const response = await this.client.get('/portals/');
-  //     return response.data;
-  //   } catch (error) {
-  //     if (error instanceof Error) {
-  //       throw handleZohoError(error as AxiosError);
-  //     }
-  //     throw error;
-  //   }
-  // }
+  get portalId(): string {
+    if (!this.config.portalId) {
+      throw new Error('Portal ID is not set');
+    }
+    return this.config.portalId;
+  }
 
-  // async getProjects(portalId?: string): Promise<ZohoAPIResponse<{ projects: ZohoProject[] }>> {
-  //   const usePortalId = portalId || this.config.portalId;
-  //   if (!usePortalId) {
-  //     throw new Error('Portal ID is required');
-  //   }
-  //   try {
-  //     const response = await this.client.get(`/portal/${usePortalId}/projects/`);
-  //     return response.data;
-  //   } catch (error) {
-  //     if (error instanceof Error) {
-  //       throw handleZohoError(error as AxiosError);
-  //     }
-  //     throw error;
-  //   }
-  // }
+  get projectId(): string {
+    if (!this.config.projectId) {
+      throw new Error('Project ID is not set');
+    }
+    return this.config.projectId;
+  }
+
+  async getPortals(): Promise<ZohoAPIResponse<{ portals: ZohoPortal[] }>> {
+    try {
+      console.log('Making request to /portals/');
+      const response = await this.client.get('/portals/');
+      console.log('Portals API response:', JSON.stringify(response.data, null, 2));
+      return {
+        data: response.data,
+        status: response.status,
+      };
+    } catch (error) {
+      console.error('Error in getPortals:', error);
+      if (error instanceof Error) {
+        throw handleZohoError(error as AxiosError);
+      }
+      throw error;
+    }
+  }
+
+  async getProjects(portalId?: string): Promise<ZohoAPIResponse<{ projects: ZohoProject[] }>> {
+    const usePortalId = portalId || this.config.portalId;
+    if (!usePortalId) {
+      throw new Error('Portal ID is required');
+    }
+    try {
+      console.log(`Making request to /portal/${usePortalId}/projects/`);
+      const response = await this.client.get(`/portal/${usePortalId}/projects/`);
+      console.log('Projects API response:', JSON.stringify(response.data, null, 2));
+      return {
+        data: response.data,
+        status: response.status,
+      };
+    } catch (error) {
+      console.error('Error in getProjects:', error);
+      if (error instanceof Error) {
+        throw handleZohoError(error as AxiosError);
+      }
+      throw error;
+    }
+  }
 
   async getUsers(portalId: string, projectId: string): Promise<ZohoAPIResponse<{ users: ZohoUser[] }>> {
     try {

@@ -45,13 +45,17 @@ export interface ZohoConfig {
 
 export interface ZohoPortal {
   id: string;
+  id_string: string;
   name: string;
   description?: string;
-  project_count?: number;
+  project_count?: {
+    active: number;
+  };
 }
 
 export interface ZohoProject {
   id: string;
+  id_string: string;
   name: string;
   description?: string;
   status: string;
@@ -160,7 +164,7 @@ export interface ZohoComment {
   created_time: string;
   updated_time?: string;
   added_by: string;
-  parent_Issue_Id ?: {
+  parent_Issue_Id?: {
     reference: {
       refers_to: {
         '#record:issues': string;
