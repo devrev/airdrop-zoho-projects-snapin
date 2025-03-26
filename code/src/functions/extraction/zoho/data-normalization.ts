@@ -48,7 +48,7 @@ export function normalizeTask(task: ZohoTask): NormalizedItem {
 
 export function normalizeIssue(issue: ZohoIssue): NormalizedItem {
   return {
-    id: String(issue.id),
+    id: String(issue.id_string),
     created_date: new Date(issue.created_time || DEFAULT_DATE).toISOString(),
     modified_date: new Date(issue.updated_time || DEFAULT_DATE).toISOString(),
     data: {
@@ -64,7 +64,7 @@ export function normalizeIssue(issue: ZohoIssue): NormalizedItem {
 
 export function normalizeIssueComment(comment: ZohoComment): NormalizedItem {
   return {
-    id: String(comment.id),
+    id: String(comment.id_string || comment.id),
     created_date: new Date(comment.created_time || DEFAULT_DATE).toISOString(),
     modified_date: new Date(comment.updated_time || comment.created_time || DEFAULT_DATE).toISOString(),
     data: {
@@ -79,7 +79,7 @@ export function normalizeIssueComment(comment: ZohoComment): NormalizedItem {
 
 export function normalizeTaskComment(comment: ZohoComment): NormalizedItem {
   return {
-    id: String(comment.id),
+    id: String(comment.id_string || comment.id),
     created_date: new Date(comment.created_time || DEFAULT_DATE).toISOString(),
     modified_date: new Date(comment.updated_time || comment.created_time || DEFAULT_DATE).toISOString(),
     data: {

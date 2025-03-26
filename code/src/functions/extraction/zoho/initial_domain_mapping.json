@@ -67,7 +67,49 @@
                         "forward": true,
                         "reverse": false,
                         "shard": {
-                            "constructed_custom_fields": {},
+                            "constructed_custom_fields": {
+                                "ext_object_type": {
+                                    "field_descriptor": {
+                                        "allowed_values": [
+                                            "Issues"
+                                        ],
+                                        "data_name": "ext_object_type",
+                                        "db_name": "ext_object_type",
+                                        "default_value": "Issues",
+                                        "description": "The source object type/subtype that the item was created from.",
+                                        "field_type": "enum",
+                                        "is_filterable": true,
+                                        "is_required": true,
+                                        "name": "ext_object_type",
+                                        "oasis": {
+                                            "name": "ext_object_type"
+                                        },
+                                        "ui": {
+                                            "display_name": "External Object Type",
+                                            "is_hidden_during_create": true,
+                                            "is_read_only": true
+                                        }
+                                    },
+                                    "transformation_method": {
+                                        "can_apply_to_null": false,
+                                        "custom_field_type": {
+                                            "allowed_values": [
+                                                "Issues"
+                                            ],
+                                            "data_name": "dummy name",
+                                            "db_name": "dummy name",
+                                            "field_type": "enum",
+                                            "name": "dummy name",
+                                            "oasis": {
+                                                "name": "dummy name"
+                                            }
+                                        },
+                                        "forward_jq": "\"Issues\"",
+                                        "transformation_method": "use_raw_jq",
+                                        "use_primary_input": false
+                                    }
+                                }
+                            },
                             "devrev_leaf_type": {
                                 "object_category": "stock",
                                 "object_type": "issue"
@@ -98,7 +140,7 @@
                                     "forward": true,
                                     "reverse": false,
                                     "transformation_method": {
-                                        "enum": "P1",
+                                        "enum": "P0",
                                         "transformation_method": "use_fixed_value",
                                         "value": "enum_value"
                                     }
@@ -107,7 +149,7 @@
                                     "forward": true,
                                     "reverse": false,
                                     "transformation_method": {
-                                        "enum": "duplicate",
+                                        "enum": "triage",
                                         "transformation_method": "use_fixed_value",
                                         "value": "enum_value"
                                     }
@@ -222,7 +264,7 @@
                                     "forward": true,
                                     "reverse": false,
                                     "transformation_method": {
-                                        "enum": "P1",
+                                        "enum": "P2",
                                         "transformation_method": "use_fixed_value",
                                         "value": "enum_value"
                                     }
@@ -274,6 +316,22 @@
                                     "transformation_method": {
                                         "transformation_method": "use_directly"
                                     }
+                                },
+                                "email": {
+                                    "forward": true,
+                                    "primary_external_field": "email",
+                                    "reverse": false,
+                                    "transformation_method": {
+                                        "transformation_method": "use_directly"
+                                    }
+                                },
+                                "full_name": {
+                                    "forward": true,
+                                    "primary_external_field": "name",
+                                    "reverse": false,
+                                    "transformation_method": {
+                                        "transformation_method": "use_directly"
+                                    }
                                 }
                             }
                         }
@@ -283,6 +341,6 @@
         }
     },
     "_dev_external_system_type": "ADaaS",
-    "_dev_snap_in_slug": "lhjj",
+    "_dev_snap_in_slug": "awefque",
     "_dev_import_slug": "airdrop-zoho-projects-snapin-extractor"
 }

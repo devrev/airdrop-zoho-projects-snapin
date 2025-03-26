@@ -123,6 +123,7 @@ export class ZohoClient {
   async getUsers(portalId: string, projectId: string): Promise<ZohoAPIResponse<{ users: ZohoUser[] }>> {
     try {
       const response = await this.client.get(`/portal/${portalId}/projects/${projectId}/users/`);
+      console.log('Div logs Users API response:', JSON.stringify(response.data, null, 2));
       return {
         data: response.data,
         status: response.status,
@@ -135,10 +136,10 @@ export class ZohoClient {
     }
   }
 
-  // Update getIssues method to handle 'bugs' response
   async getIssues(portalId: string, projectId: string): Promise<ZohoAPIResponse<{ issues: ZohoIssue[] }>> {
     try {
-      const response = await this.client.get(`/portal/${portalId}/projects/${projectId}/issues/`);
+      const response = await this.client.get(`/portal/${portalId}/projects/${projectId}/bugs/`);
+      console.log('Div logs Bugs API response:', JSON.stringify(response.data, null, 2));
       return {
         data: {
           issues: response.data.bugs || [], // Map bugs to issues
@@ -156,7 +157,7 @@ export class ZohoClient {
   async getTasks(portalId: string, projectId: string): Promise<ZohoAPIResponse<{ tasks: ZohoTask[] }>> {
     try {
       const response = await this.client.get(`/portal/${portalId}/projects/${projectId}/tasks/`);
-      console.log('DLOGG tasksResponse in client.ts', JSON.stringify(response.data, null, 2));
+      console.log('Div logs Tasks API response:', JSON.stringify(response.data, null, 2));
       return {
         data: response.data,
         status: response.status,
@@ -174,8 +175,17 @@ export class ZohoClient {
     projectId: string,
     issueId: string
   ): Promise<ZohoAPIResponse<{ comments: ZohoComment[] }>> {
-    const response = await this.client.get(`/portal/${portalId}/projects/${projectId}/issues/${issueId}/comments/`);
-    return response;
+    try {
+      console.log(`Fetching comments for bug (issue) with ID: ${issueId}`);
+      const response = await this.client.get(`/portal/${portalId}/projects/${projectId}/bugs/${issueId}/comments/`);
+      console.log('Div logs Bug comments response:', JSON.stringify(response.data, null, 2));
+      return response;
+    } catch (error) {
+      if (error instanceof Error) {
+        throw handleZohoError(error as AxiosError);
+      }
+      throw error;
+    }
   }
 
   async getTaskComments(
@@ -185,7 +195,7 @@ export class ZohoClient {
   ): Promise<ZohoAPIResponse<{ comments: ZohoComment[] }>> {
     try {
       const response = await this.client.get(`/portal/${portalId}/projects/${projectId}/tasks/${taskId}/comments/`);
-      console.log('taskCommentsResponse in client.ts', JSON.stringify(response.data, null, 2));
+      console.log('Div logs taskCommentsResponse in client.ts', JSON.stringify(response.data, null, 2));
       return response;
     } catch (error) {
       if (error instanceof Error) {

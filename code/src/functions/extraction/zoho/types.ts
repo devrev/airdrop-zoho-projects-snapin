@@ -1,6 +1,7 @@
 export enum ItemType {
   USERS = 'users',
   TASKS = 'tasks',
+  BUGS = 'bugs',
   ISSUES = 'issues',
   TASK_COMMENTS = 'task_comments',
   ISSUE_COMMENTS = 'issue_comments',
@@ -17,7 +18,7 @@ export interface ItemTypeToExtract {
   functionName: ItemTypeExtractFunction;
 }
 
-type ExtractorStateBase = {
+export type ExtractorStateBase = {
   complete: boolean;
   page: number;
 };
@@ -28,6 +29,7 @@ export interface ExtractorState {
   [ItemType.ISSUES]: ExtractorStateBase;
   [ItemType.TASK_COMMENTS]: ExtractorStateBase;
   [ItemType.ISSUE_COMMENTS]: ExtractorStateBase;
+  [key: string]: ExtractorStateBase | string[] | string;
   extractedTasks: string[];
   extractedIssues: string[];
   lastSyncStarted: string;
@@ -85,6 +87,7 @@ export interface ZohoSeverity {
 
 export interface ZohoIssue {
   id: string;
+  id_string: string;
   title: string;
   description: string;
   bug_number: string;
@@ -160,6 +163,7 @@ export interface ZohoTask {
 
 export interface ZohoComment {
   id: string;
+  id_string?: string;
   content: string;
   created_time: string;
   updated_time?: string;
@@ -224,4 +228,14 @@ export interface UpdateIssueParams {
   description?: string;
   status?: string;
   severity?: string;
+}
+
+/**
+ * Global configuration parameters extracted from the event
+ */
+export interface ZohoGlobals {
+  accessToken: string;
+  devRevBaseUrl?: string;
+  devOrgId?: string;
+  snapInId?: string;
 }
