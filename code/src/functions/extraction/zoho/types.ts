@@ -161,28 +161,40 @@ export interface ZohoTask {
   key: string;
 }
 
-export interface ZohoComment {
-  id: string;
-  id_string?: string;
+export interface ZohoIssueComment {
+  comment_id: string;
+  comment: string;
+  created_time: string;
+  created_time_long: number;
+  created_time_format: string;
+  updated_time: string;
+  updated_time_long: number;
+  updated_time_format: string;
+  added_by: string;
+  added_person: string;
+  updated_by: string;
+  updated_person: string;
+  parent_Issue_Id?: string;
+}
+
+export interface ZohoTaskComment {
+  id: number;
+  id_string: string;
   content: string;
   created_time: string;
-  updated_time?: string;
+  updated_time: string;
+  created_time_long: number;
+  created_time_format: string;
   added_by: string;
-  parent_Issue_Id?: {
-    reference: {
-      refers_to: {
-        '#record:issues': string;
-      };
-    };
+  added_person: string;
+  project: {
+    name: string;
+    id: string;
   };
-  parent_Task_Id?: {
-    reference: {
-      refers_to: {
-        '#record:tasks': string;
-      };
-    };
-  };
+  parent_Task_Id?: string;
 }
+
+export type ZohoComment = ZohoIssueComment | ZohoTaskComment;
 
 export interface ZohoAPIResponse<T> {
   data: T;

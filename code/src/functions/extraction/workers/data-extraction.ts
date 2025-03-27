@@ -379,6 +379,9 @@ async function extractIssueComments(adapter: WorkerAdapter<ExtractorState>, clie
             parent_Issue_Id: cleanIssueId,
           }));
 
+          // Add additional debugging
+          console.log(`Debug - Issue comment structure before pushing:`, JSON.stringify(comments[0], null, 2));
+
           const repo = adapter.getRepo(ItemType.ISSUE_COMMENTS);
           if (!repo) {
             console.error('Issue comments repository not found');
@@ -538,6 +541,9 @@ async function extractTaskComments(adapter: WorkerAdapter<ExtractorState>, clien
             ...comment,
             parent_Task_Id: cleanTaskId,
           }));
+
+          // Add additional debugging
+          console.log(`Debug - Task comment structure before pushing:`, JSON.stringify(comments[0], null, 2));
 
           const repo = adapter.getRepo(ItemType.TASK_COMMENTS);
           if (!repo) {

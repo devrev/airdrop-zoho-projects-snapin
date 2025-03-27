@@ -1,8 +1,6 @@
 import { NormalizedItem } from '@devrev/ts-adaas';
-import { ZohoComment, ZohoIssue, ZohoTask, ZohoUser } from './types';
-
+import { ZohoIssue, ZohoIssueComment, ZohoTask, ZohoTaskComment, ZohoUser } from './types';
 const DEFAULT_DATE = '1970-01-01T00:00:00Z';
-
 function transformHtmlContent(content: string | null): string | null {
   if (!content) return null;
   return content
@@ -10,7 +8,6 @@ function transformHtmlContent(content: string | null): string | null {
     .replace(/<\/div>/g, '\n')
     .trim();
 }
-
 export function normalizeUser(user: ZohoUser): NormalizedItem {
   return {
     id: user.id,
@@ -25,7 +22,6 @@ export function normalizeUser(user: ZohoUser): NormalizedItem {
     },
   };
 }
-
 export function normalizeTask(task: ZohoTask): NormalizedItem {
   return {
     id: String(task.id_string),
@@ -62,13 +58,13 @@ export function normalizeIssue(issue: ZohoIssue): NormalizedItem {
   };
 }
 
-export function normalizeIssueComment(comment: ZohoComment): NormalizedItem {
+export function normalizeIssueComment(comment: ZohoIssueComment): NormalizedItem {
   return {
-    id: String(comment.id_string || comment.id),
+    id: String(comment.comment_id),
     created_date: new Date(comment.created_time || DEFAULT_DATE).toISOString(),
     modified_date: new Date(comment.updated_time || comment.created_time || DEFAULT_DATE).toISOString(),
     data: {
-      content: transformHtmlContent(comment.content) || '',
+      content: transformHtmlContent(comment.comment) || '',
       added_by: comment.added_by,
       parent_Issue_Id: String(comment.parent_Issue_Id),
       created_time: new Date(comment.created_time || DEFAULT_DATE).toISOString(),
@@ -77,7 +73,7 @@ export function normalizeIssueComment(comment: ZohoComment): NormalizedItem {
   };
 }
 
-export function normalizeTaskComment(comment: ZohoComment): NormalizedItem {
+export function normalizeTaskComment(comment: ZohoTaskComment): NormalizedItem {
   return {
     id: String(comment.id_string || comment.id),
     created_date: new Date(comment.created_time || DEFAULT_DATE).toISOString(),
