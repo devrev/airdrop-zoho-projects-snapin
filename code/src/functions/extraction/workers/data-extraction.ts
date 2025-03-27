@@ -208,10 +208,10 @@ async function extractUsers(adapter: WorkerAdapter<ExtractorState>, client: Zoho
     const response = await client.getUsers(client.portalId, client.projectId);
     console.log(
       'User API response structure:',
-      JSON.stringify(response?.data || {}, null, 2).substring(0, 200) + '...'
+      JSON.stringify(response?.data || [], null, 2).substring(0, 200) + '...'
     );
 
-    const users = response?.data?.users;
+    const users = response?.data;
 
     if (!users || users.length === 0) {
       console.log('No users found');
@@ -246,7 +246,9 @@ async function extractUsers(adapter: WorkerAdapter<ExtractorState>, client: Zoho
     return false;
   } catch (error) {
     if (error instanceof ZohoRateLimitError) {
-      console.log(`Rate limit reached. Reset in ${error.delay} milliseconds`);
+      console.log(
+        `Rate limit reached: Made 100 API requests. Waiting ${error.delay / 1000} seconds before continuing.`
+      );
       await adapter.emit(ExtractorEventType.ExtractionDataDelay, {
         delay: error.delay,
       });
@@ -270,10 +272,10 @@ async function extractIssues(adapter: WorkerAdapter<ExtractorState>, client: Zoh
     const response = await client.getIssues(client.portalId, client.projectId);
     console.log(
       'Issues API response structure:',
-      JSON.stringify(response?.data || {}, null, 2).substring(0, 200) + '...'
+      JSON.stringify(response?.data?.slice(0, 2) || {}, null, 2).substring(0, 200) + '...'
     );
 
-    const issues = response?.data?.issues;
+    const issues = response?.data;
 
     if (!issues || issues.length === 0) {
       console.log('No bugs/issues found');
@@ -284,7 +286,7 @@ async function extractIssues(adapter: WorkerAdapter<ExtractorState>, client: Zoh
       return false;
     }
 
-    console.log(`Found ${issues.length} bugs/issues`);
+    console.log(`Found ${issues.length} bugs/issues across ${response.lastPage} pages`);
 
     // Log a sample issue to help with debugging
     if (issues.length > 0) {
@@ -323,12 +325,15 @@ async function extractIssues(adapter: WorkerAdapter<ExtractorState>, client: Zoh
 
     const issueState = adapter.state[ItemType.ISSUES];
     if (isExtractorStateBase(issueState)) {
+      issueState.page = response.lastPage;
       issueState.complete = true;
     }
     return false;
   } catch (error) {
     if (error instanceof ZohoRateLimitError) {
-      console.log(`Rate limit reached. Reset in ${error.delay} milliseconds`);
+      console.log(
+        `Rate limit reached: Made 100 API requests. Waiting ${error.delay / 1000} seconds before continuing.`
+      );
       await adapter.emit(ExtractorEventType.ExtractionDataDelay, {
         delay: error.delay,
       });
@@ -402,7 +407,9 @@ async function extractIssueComments(adapter: WorkerAdapter<ExtractorState>, clie
         if (error instanceof ZohoRateLimitError) {
           // Put remaining IDs back in the queue
           adapter.state.extractedIssues.push(...issueIds.slice(issueIds.indexOf(issueId)));
-          console.log(`Rate limit reached. Reset in ${error.delay} milliseconds`);
+          console.log(
+            `Rate limit reached: Made 100 API requests. Waiting ${error.delay / 1000} seconds before continuing.`
+          );
           await adapter.emit(ExtractorEventType.ExtractionDataDelay, {
             delay: error.delay,
           });
@@ -438,10 +445,10 @@ async function extractTasks(adapter: WorkerAdapter<ExtractorState>, client: Zoho
     const response = await client.getTasks(client.portalId, client.projectId);
     console.log(
       'Tasks API response structure:',
-      JSON.stringify(response?.data || {}, null, 2).substring(0, 200) + '...'
+      JSON.stringify(response?.data?.slice(0, 2) || {}, null, 2).substring(0, 200) + '...'
     );
 
-    const tasks = response?.data?.tasks;
+    const tasks = response?.data;
 
     if (!tasks || tasks.length === 0) {
       console.log('No tasks found');
@@ -452,7 +459,7 @@ async function extractTasks(adapter: WorkerAdapter<ExtractorState>, client: Zoho
       return false;
     }
 
-    console.log(`Found ${tasks.length} tasks`);
+    console.log(`Found ${tasks.length} tasks across ${response.lastPage} pages`);
 
     // Push tasks to repository
     const repo = adapter.getRepo(ItemType.TASKS);
@@ -486,12 +493,15 @@ async function extractTasks(adapter: WorkerAdapter<ExtractorState>, client: Zoho
 
     const taskState = adapter.state[ItemType.TASKS];
     if (isExtractorStateBase(taskState)) {
+      taskState.page = response.lastPage;
       taskState.complete = true;
     }
     return false;
   } catch (error) {
     if (error instanceof ZohoRateLimitError) {
-      console.log(`Rate limit reached. Reset in ${error.delay} milliseconds`);
+      console.log(
+        `Rate limit reached: Made 100 API requests. Waiting ${error.delay / 1000} seconds before continuing.`
+      );
       await adapter.emit(ExtractorEventType.ExtractionDataDelay, {
         delay: error.delay,
       });
@@ -565,7 +575,9 @@ async function extractTaskComments(adapter: WorkerAdapter<ExtractorState>, clien
         if (error instanceof ZohoRateLimitError) {
           // Put remaining IDs back in the queue
           adapter.state.extractedTasks.push(...taskIds.slice(taskIds.indexOf(taskId)));
-          console.log(`Rate limit reached. Reset in ${error.delay} milliseconds`);
+          console.log(
+            `Rate limit reached: Made 100 API requests. Waiting ${error.delay / 1000} seconds before continuing.`
+          );
           await adapter.emit(ExtractorEventType.ExtractionDataDelay, {
             delay: error.delay,
           });
