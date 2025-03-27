@@ -1,10 +1,11 @@
 import { ExtractorEventType, processTask, SyncMode, WorkerAdapter } from '@devrev/ts-adaas';
 import { ZohoClient } from '../zoho/client';
-import { initialState, repos, ZohoRateLimitError } from '../zoho/helper';
+import { getItemTypesToExtract, initialState, repos, ZohoRateLimitError } from '../zoho/helper';
 import {
   ExtractorState,
   ExtractorStateBase,
   ItemType,
+  ItemTypeToExtract,
   ZohoGlobals,
   ZohoIssue,
   ZohoTask,
@@ -42,30 +43,46 @@ function resetItemStates(state: ExtractorState, itemTypes: ItemType[]) {
 }
 
 processTask<ExtractorState>({
-  task: async ({ adapter }) => {
+  task: async ({ adapter }: { adapter: WorkerAdapter<ExtractorState> }) => {
+    // Initialize repositories - make sure this is correctly initializing all repos
     adapter.initializeRepos(repos);
 
-    // Initialize the state
+    // Log the item types we have in repos array for debugging
+    console.log(
+      'Repository item types:',
+      repos.map((repo) => repo)
+    );
+
+    console.log('Adapter state:', adapter.state);
+
+    // If state is not initialized, use the default initial state
     if (!adapter.state) {
-      adapter.state = {} as ExtractorState;
+      adapter.state = { ...initialState };
     }
 
-    // Initialize base state properties
-    adapter.state.lastSyncStarted = adapter.state.lastSyncStarted || '';
-    adapter.state.lastSuccessfulSyncStarted = adapter.state.lastSuccessfulSyncStarted || '';
-    adapter.state.portal_id = adapter.state.portal_id || '';
-    adapter.state.project_id = adapter.state.project_id || '';
+    let stop = false;
+    const itemTypesToExtract = getItemTypesToExtract();
 
-    // Initialize extraction arrays
-    adapter.state.extractedTasks = adapter.state.extractedTasks || [];
-    adapter.state.extractedIssues = adapter.state.extractedIssues || [];
+    // Debug log the item types to extract
+    console.log(
+      'Item types to extract:',
+      itemTypesToExtract.map((item) => item.name)
+    );
 
-    // Explicitly initialize each item type state
-    adapter.state[ItemType.USERS] = adapter.state[ItemType.USERS] || { complete: false, page: 1 };
-    adapter.state[ItemType.TASKS] = adapter.state[ItemType.TASKS] || { complete: false, page: 1 };
-    adapter.state[ItemType.ISSUES] = adapter.state[ItemType.ISSUES] || { complete: false, page: 1 };
-    adapter.state[ItemType.TASK_COMMENTS] = adapter.state[ItemType.TASK_COMMENTS] || { complete: false, page: 1 };
-    adapter.state[ItemType.ISSUE_COMMENTS] = adapter.state[ItemType.ISSUE_COMMENTS] || { complete: false, page: 1 };
+    // Handle incremental sync mode (similar to GitHub implementation)
+    if (adapter.event.payload.event_context.mode === SyncMode.INCREMENTAL) {
+      adapter.state.lastSyncStarted = new Date().toISOString();
+      console.log('Incremental extraction, setting complete to false for all item types.');
+
+      // Reset each item type state (with type safety)
+      for (const itemTypeToExtract of itemTypesToExtract) {
+        const itemState = adapter.state[itemTypeToExtract.name];
+        if (isExtractorStateBase(itemState)) {
+          itemState.complete = false;
+          itemState.page = 1;
+        }
+      }
+    }
 
     // Get global parameters from event context
     const globals = getZohoGlobalsFromEvent(adapter.event);
@@ -103,19 +120,6 @@ processTask<ExtractorState>({
       return;
     }
 
-    // Handle incremental sync mode
-    if (adapter.event.payload.event_context.mode === SyncMode.INCREMENTAL) {
-      adapter.state.lastSyncStarted = new Date().toISOString();
-      console.log('Incremental extraction, setting complete to false for all item types.');
-      resetItemStates(adapter.state, [
-        ItemType.USERS,
-        ItemType.ISSUES,
-        ItemType.ISSUE_COMMENTS,
-        ItemType.TASKS,
-        ItemType.TASK_COMMENTS,
-      ]);
-    }
-
     // Initialize client
     const client = new ZohoClient({
       accessToken: globals.accessToken,
@@ -125,37 +129,61 @@ processTask<ExtractorState>({
 
     console.log('Initialized Zoho client with portal ID:', client.portalId, 'and project ID:', client.projectId);
 
-    // Sequential extraction in the specified order
-    let stop = false;
-
-    // 1. Extract Users
-    if (!stop) {
-      console.log('--- STEP 1: Extracting Users ---');
-      stop = await extractUsers(adapter, client);
+    // Validate that repositories exist for all item types
+    for (const itemType of Object.values(ItemType)) {
+      const repo = adapter.getRepo(itemType);
+      if (!repo) {
+        console.warn(`Repository for ${itemType} is not initialized!`);
+      } else {
+        console.log(`Repository for ${itemType} is available`);
+      }
     }
 
-    // 2. Extract Bugs/Issues
-    if (!stop) {
-      console.log('--- STEP 2: Extracting Bugs/Issues ---');
-      stop = await extractIssues(adapter, client);
+    // Extract each item type (ensure we're handling all needed types)
+    for (const itemTypeToExtract of itemTypesToExtract) {
+      if (stop) {
+        break;
+      }
+
+      const itemState = adapter.state[itemTypeToExtract.name];
+      if (isExtractorStateBase(itemState) && !itemState.complete) {
+        console.log(`Extracting ${itemTypeToExtract.name}...`);
+
+        switch (itemTypeToExtract.name) {
+          case ItemType.USERS:
+            stop = await extractUsers(adapter, client);
+            break;
+          case ItemType.ISSUES:
+            stop = await extractIssues(adapter, client);
+            break;
+          case ItemType.TASKS:
+            stop = await extractTasks(adapter, client);
+            break;
+          default:
+            console.log(`No extraction handler for item type: ${itemTypeToExtract.name}`);
+        }
+      } else {
+        console.log(
+          `Skipping ${itemTypeToExtract.name}: complete=${
+            isExtractorStateBase(itemState) ? itemState.complete : 'unknown'
+          }`
+        );
+      }
     }
 
-    // 3. Extract Bug/Issue Comments
-    if (!stop && adapter.state.extractedIssues.length > 0) {
-      console.log('--- STEP 3: Extracting Bug/Issue Comments ---');
+    // Extract comments if we have issues or tasks
+    if (!stop && adapter.state.extractedIssues && adapter.state.extractedIssues.length > 0) {
+      console.log(`--- Extracting Issue Comments for ${adapter.state.extractedIssues.length} issues ---`);
       stop = await extractIssueComments(adapter, client);
+    } else {
+      console.log('No issues to extract comments for');
     }
 
-    // 4. Extract Tasks
-    if (!stop) {
-      console.log('--- STEP 4: Extracting Tasks ---');
-      stop = await extractTasks(adapter, client);
-    }
-
-    // 5. Extract Task Comments
-    if (!stop && adapter.state.extractedTasks.length > 0) {
-      console.log('--- STEP 5: Extracting Task Comments ---');
+    if (!stop && adapter.state.extractedTasks && adapter.state.extractedTasks.length > 0) {
+      console.log(`--- Extracting Task Comments for ${adapter.state.extractedTasks.length} tasks ---`);
       stop = await extractTaskComments(adapter, client);
+    } else {
+      console.log('No tasks to extract comments for');
     }
 
     // Emit completion event if everything was processed successfully
@@ -163,7 +191,7 @@ processTask<ExtractorState>({
       await adapter.emit(ExtractorEventType.ExtractionDataDone);
     }
   },
-  onTimeout: async ({ adapter }) => {
+  onTimeout: async ({ adapter }: { adapter: WorkerAdapter<ExtractorState> }) => {
     await adapter.postState();
     await adapter.emit(ExtractorEventType.ExtractionDataProgress, {
       progress: 50,
@@ -178,11 +206,19 @@ async function extractUsers(adapter: WorkerAdapter<ExtractorState>, client: Zoho
   try {
     console.log('Fetching users from Zoho');
     const response = await client.getUsers(client.portalId, client.projectId);
-    const users = response.data.users;
+    console.log(
+      'User API response structure:',
+      JSON.stringify(response?.data || {}, null, 2).substring(0, 200) + '...'
+    );
+
+    const users = response?.data?.users;
 
     if (!users || users.length === 0) {
       console.log('No users found');
-      adapter.state[ItemType.USERS].complete = true;
+      const userState = adapter.state[ItemType.USERS];
+      if (isExtractorStateBase(userState)) {
+        userState.complete = true;
+      }
       return false;
     }
 
@@ -195,8 +231,18 @@ async function extractUsers(adapter: WorkerAdapter<ExtractorState>, client: Zoho
       return true;
     }
 
-    await repo.push(users);
-    adapter.state[ItemType.USERS].complete = true;
+    try {
+      await repo.push(users);
+      console.log(`Successfully pushed ${users.length} users to repository`);
+    } catch (pushError) {
+      console.error('Error pushing users to repository:', pushError);
+      return true;
+    }
+
+    const userState = adapter.state[ItemType.USERS];
+    if (isExtractorStateBase(userState)) {
+      userState.complete = true;
+    }
     return false;
   } catch (error) {
     if (error instanceof ZohoRateLimitError) {
@@ -222,11 +268,19 @@ async function extractIssues(adapter: WorkerAdapter<ExtractorState>, client: Zoh
   try {
     console.log('Fetching bugs/issues from Zoho');
     const response = await client.getIssues(client.portalId, client.projectId);
-    const issues = response.data.issues;
+    console.log(
+      'Issues API response structure:',
+      JSON.stringify(response?.data || {}, null, 2).substring(0, 200) + '...'
+    );
+
+    const issues = response?.data?.issues;
 
     if (!issues || issues.length === 0) {
       console.log('No bugs/issues found');
-      adapter.state[ItemType.ISSUES].complete = true;
+      const issueState = adapter.state[ItemType.ISSUES];
+      if (isExtractorStateBase(issueState)) {
+        issueState.complete = true;
+      }
       return false;
     }
 
@@ -244,7 +298,13 @@ async function extractIssues(adapter: WorkerAdapter<ExtractorState>, client: Zoh
       return true;
     }
 
-    await repo.push(issues);
+    try {
+      await repo.push(issues);
+      console.log(`Successfully pushed ${issues.length} issues to repository`);
+    } catch (pushError) {
+      console.error('Error pushing issues to repository:', pushError);
+      return true;
+    }
 
     // Store issue IDs for later comment extraction
     const issueIds = issues.map((issue) => {
@@ -253,10 +313,18 @@ async function extractIssues(adapter: WorkerAdapter<ExtractorState>, client: Zoh
       return id;
     });
 
+    // Initialize extractedIssues array if it doesn't exist
+    if (!adapter.state.extractedIssues) {
+      adapter.state.extractedIssues = [];
+    }
+
     adapter.state.extractedIssues = issueIds;
     console.log(`Added ${issueIds.length} bug/issue IDs to extraction queue`);
 
-    adapter.state[ItemType.ISSUES].complete = true;
+    const issueState = adapter.state[ItemType.ISSUES];
+    if (isExtractorStateBase(issueState)) {
+      issueState.complete = true;
+    }
     return false;
   } catch (error) {
     if (error instanceof ZohoRateLimitError) {
@@ -280,9 +348,17 @@ async function extractIssues(adapter: WorkerAdapter<ExtractorState>, client: Zoh
  */
 async function extractIssueComments(adapter: WorkerAdapter<ExtractorState>, client: ZohoClient): Promise<boolean> {
   try {
+    // Guard against undefined extractedIssues
+    if (!adapter.state.extractedIssues) {
+      console.log('extractedIssues is undefined, initializing empty array');
+      adapter.state.extractedIssues = [];
+    }
+
     const issueIds = [...adapter.state.extractedIssues];
     console.log(`Processing comments for ${issueIds.length} bugs/issues`);
     adapter.state.extractedIssues = []; // Clear for next round
+
+    let commentsPushed = 0;
 
     for (const issueId of issueIds) {
       try {
@@ -290,7 +366,12 @@ async function extractIssueComments(adapter: WorkerAdapter<ExtractorState>, clie
         console.log(`Fetching comments for bug/issue: ${cleanIssueId}`);
 
         const response = await client.getIssueComments(client.portalId, client.projectId, cleanIssueId);
-        if (response.data?.comments?.length > 0) {
+        console.log(
+          `Comments API response for issue ${cleanIssueId}:`,
+          JSON.stringify(response?.data || {}, null, 2).substring(0, 200) + '...'
+        );
+
+        if (response?.data?.comments?.length > 0) {
           console.log(`Found ${response.data.comments.length} comments for bug/issue ${cleanIssueId}`);
 
           const comments = response.data.comments.map((comment) => ({
@@ -298,7 +379,19 @@ async function extractIssueComments(adapter: WorkerAdapter<ExtractorState>, clie
             parent_Issue_Id: cleanIssueId,
           }));
 
-          await adapter.getRepo(ItemType.ISSUE_COMMENTS)?.push(comments);
+          const repo = adapter.getRepo(ItemType.ISSUE_COMMENTS);
+          if (!repo) {
+            console.error('Issue comments repository not found');
+            continue;
+          }
+
+          try {
+            await repo.push(comments);
+            commentsPushed += comments.length;
+            console.log(`Successfully pushed ${comments.length} comments for issue ${cleanIssueId}`);
+          } catch (pushError) {
+            console.error(`Error pushing comments for issue ${cleanIssueId}:`, pushError);
+          }
         } else {
           console.log(`No comments found for bug/issue ${cleanIssueId}`);
         }
@@ -317,7 +410,12 @@ async function extractIssueComments(adapter: WorkerAdapter<ExtractorState>, clie
       }
     }
 
-    adapter.state[ItemType.ISSUE_COMMENTS].complete = true;
+    const issueCommentsState = adapter.state[ItemType.ISSUE_COMMENTS];
+    if (isExtractorStateBase(issueCommentsState)) {
+      issueCommentsState.complete = true;
+    }
+
+    console.log(`Completed issue comments extraction, pushed ${commentsPushed} comments in total`);
     return false;
   } catch (error) {
     console.error('Error processing bug/issue comments:', error);
@@ -335,11 +433,19 @@ async function extractTasks(adapter: WorkerAdapter<ExtractorState>, client: Zoho
   try {
     console.log('Fetching tasks from Zoho');
     const response = await client.getTasks(client.portalId, client.projectId);
-    const tasks = response.data.tasks;
+    console.log(
+      'Tasks API response structure:',
+      JSON.stringify(response?.data || {}, null, 2).substring(0, 200) + '...'
+    );
+
+    const tasks = response?.data?.tasks;
 
     if (!tasks || tasks.length === 0) {
       console.log('No tasks found');
-      adapter.state[ItemType.TASKS].complete = true;
+      const taskState = adapter.state[ItemType.TASKS];
+      if (isExtractorStateBase(taskState)) {
+        taskState.complete = true;
+      }
       return false;
     }
 
@@ -352,7 +458,13 @@ async function extractTasks(adapter: WorkerAdapter<ExtractorState>, client: Zoho
       return true;
     }
 
-    await repo.push(tasks);
+    try {
+      await repo.push(tasks);
+      console.log(`Successfully pushed ${tasks.length} tasks to repository`);
+    } catch (pushError) {
+      console.error('Error pushing tasks to repository:', pushError);
+      return true;
+    }
 
     // Store task IDs for later comment extraction
     const taskIds = tasks.map((task) => {
@@ -361,10 +473,18 @@ async function extractTasks(adapter: WorkerAdapter<ExtractorState>, client: Zoho
       return id;
     });
 
+    // Initialize extractedTasks array if it doesn't exist
+    if (!adapter.state.extractedTasks) {
+      adapter.state.extractedTasks = [];
+    }
+
     adapter.state.extractedTasks = taskIds;
     console.log(`Added ${taskIds.length} task IDs to extraction queue`);
 
-    adapter.state[ItemType.TASKS].complete = true;
+    const taskState = adapter.state[ItemType.TASKS];
+    if (isExtractorStateBase(taskState)) {
+      taskState.complete = true;
+    }
     return false;
   } catch (error) {
     if (error instanceof ZohoRateLimitError) {
@@ -388,9 +508,17 @@ async function extractTasks(adapter: WorkerAdapter<ExtractorState>, client: Zoho
  */
 async function extractTaskComments(adapter: WorkerAdapter<ExtractorState>, client: ZohoClient): Promise<boolean> {
   try {
+    // Guard against undefined extractedTasks
+    if (!adapter.state.extractedTasks) {
+      console.log('extractedTasks is undefined, initializing empty array');
+      adapter.state.extractedTasks = [];
+    }
+
     const taskIds = [...adapter.state.extractedTasks];
     console.log(`Processing comments for ${taskIds.length} tasks`);
     adapter.state.extractedTasks = []; // Clear for next round
+
+    let commentsPushed = 0;
 
     for (const taskId of taskIds) {
       try {
@@ -398,7 +526,12 @@ async function extractTaskComments(adapter: WorkerAdapter<ExtractorState>, clien
         console.log(`Fetching comments for task: ${cleanTaskId}`);
 
         const response = await client.getTaskComments(client.portalId, client.projectId, cleanTaskId);
-        if (response.data?.comments?.length > 0) {
+        console.log(
+          `Comments API response for task ${cleanTaskId}:`,
+          JSON.stringify(response?.data || {}, null, 2).substring(0, 200) + '...'
+        );
+
+        if (response?.data?.comments?.length > 0) {
           console.log(`Found ${response.data.comments.length} comments for task ${cleanTaskId}`);
 
           const comments = response.data.comments.map((comment) => ({
@@ -406,7 +539,19 @@ async function extractTaskComments(adapter: WorkerAdapter<ExtractorState>, clien
             parent_Task_Id: cleanTaskId,
           }));
 
-          await adapter.getRepo(ItemType.TASK_COMMENTS)?.push(comments);
+          const repo = adapter.getRepo(ItemType.TASK_COMMENTS);
+          if (!repo) {
+            console.error('Task comments repository not found');
+            continue;
+          }
+
+          try {
+            await repo.push(comments);
+            commentsPushed += comments.length;
+            console.log(`Successfully pushed ${comments.length} comments for task ${cleanTaskId}`);
+          } catch (pushError) {
+            console.error(`Error pushing comments for task ${cleanTaskId}:`, pushError);
+          }
         } else {
           console.log(`No comments found for task ${cleanTaskId}`);
         }
@@ -425,7 +570,12 @@ async function extractTaskComments(adapter: WorkerAdapter<ExtractorState>, clien
       }
     }
 
-    adapter.state[ItemType.TASK_COMMENTS].complete = true;
+    const taskCommentsState = adapter.state[ItemType.TASK_COMMENTS];
+    if (isExtractorStateBase(taskCommentsState)) {
+      taskCommentsState.complete = true;
+    }
+
+    console.log(`Completed task comments extraction, pushed ${commentsPushed} comments in total`);
     return false;
   } catch (error) {
     console.error('Error processing task comments:', error);

@@ -8,11 +8,6 @@ const repos = [
   },
 ];
 
-/**
- * Process the metadata extraction task for Zoho
- * This implementation uses static metadata since Zoho's field structure
- * is relatively stable and well-defined
- */
 processTask({
   task: async ({ adapter }) => {
     try {
