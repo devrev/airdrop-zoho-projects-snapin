@@ -57,13 +57,13 @@ keyring_types:
         "client_secret": "[CLIENT_SECRET]"
     refresh:
       type: "config"
-      url: "https://accounts.zoho.com/oauth/v2/token"
+      url: "https://accounts.[SUBDOMAIN].com/oauth/v2/token"
       method: "POST"
       query_parameters:
         "client_id": "[CLIENT_ID]"
         "client_secret": "[CLIENT_SECRET]"
         "refresh_token": "[REFRESH_TOKEN]"
-        "grant_type": "refresh_token"
+        "grant_type": "authorization_code"
       headers:
         "Content-type": "application/x-www-form-urlencoded"
 
