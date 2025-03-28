@@ -82,6 +82,11 @@ export class ZohoClient {
     });
   }
 
+  // New method to expose API call count
+  public getApiCallCount(): number {
+    return this.totalRequestsMade;
+  }
+
   get portalId(): string {
     if (!this.config.portalId) {
       throw new Error('Portal ID is not set');

@@ -47,6 +47,8 @@ processTask<ExtractorState>({
     // Initialize repositories - make sure this is correctly initializing all repos
     adapter.initializeRepos(repos);
 
+    console.log('Starting extraction process - tracking API calls');
+
     // Log the item types we have in repos array for debugging
     console.log(
       'Repository item types:',
@@ -128,6 +130,7 @@ processTask<ExtractorState>({
     });
 
     console.log('Initialized Zoho client with portal ID:', client.portalId, 'and project ID:', client.projectId);
+    console.log('API call counter starting at:', client.getApiCallCount ? client.getApiCallCount() : 'unknown');
 
     // Validate that repositories exist for all item types
     for (const itemType of Object.values(ItemType)) {
@@ -148,6 +151,11 @@ processTask<ExtractorState>({
       const itemState = adapter.state[itemTypeToExtract.name];
       if (isExtractorStateBase(itemState) && !itemState.complete) {
         console.log(`Extracting ${itemTypeToExtract.name}...`);
+        console.log(
+          `Current API call count before ${itemTypeToExtract.name}: ${
+            client.getApiCallCount ? client.getApiCallCount() : 'unknown'
+          }`
+        );
 
         switch (itemTypeToExtract.name) {
           case ItemType.USERS:
@@ -162,6 +170,12 @@ processTask<ExtractorState>({
           default:
             console.log(`No extraction handler for item type: ${itemTypeToExtract.name}`);
         }
+
+        console.log(
+          `API call count after ${itemTypeToExtract.name} extraction: ${
+            client.getApiCallCount ? client.getApiCallCount() : 'unknown'
+          }`
+        );
       } else {
         console.log(
           `Skipping ${itemTypeToExtract.name}: complete=${
@@ -204,11 +218,11 @@ processTask<ExtractorState>({
  */
 async function extractUsers(adapter: WorkerAdapter<ExtractorState>, client: ZohoClient): Promise<boolean> {
   try {
-    console.log('Fetching users from Zoho');
+    console.log('Fetching users from Zoho - API call #', client.getApiCallCount ? client.getApiCallCount() : 'unknown');
     const response = await client.getUsers(client.portalId, client.projectId);
     console.log(
-      'User API response structure:',
-      JSON.stringify(response?.data || [], null, 2).substring(0, 200) + '...'
+      'Users API call completed - current count:',
+      client.getApiCallCount ? client.getApiCallCount() : 'unknown'
     );
 
     const users = response?.data;
@@ -247,11 +261,16 @@ async function extractUsers(adapter: WorkerAdapter<ExtractorState>, client: Zoho
   } catch (error) {
     if (error instanceof ZohoRateLimitError) {
       console.log(
-        `Rate limit reached: Made 100 API requests. Waiting ${error.delay / 1000} seconds before continuing.`
+        `Rate limit reached in extractUsers: Made 100 API requests. Waiting ${
+          error.delay / 1000
+        } seconds before continuing.`
       );
+      console.log(`API call count at rate limit: ${client.getApiCallCount ? client.getApiCallCount() : 'unknown'}`);
+      console.log(`Timestamp before delay: ${new Date().toISOString()}`);
       await adapter.emit(ExtractorEventType.ExtractionDataDelay, {
         delay: error.delay,
       });
+      console.log(`Timestamp after delay event: ${new Date().toISOString()}`);
       return true;
     }
 
@@ -268,12 +287,16 @@ async function extractUsers(adapter: WorkerAdapter<ExtractorState>, client: Zoho
  */
 async function extractIssues(adapter: WorkerAdapter<ExtractorState>, client: ZohoClient): Promise<boolean> {
   try {
-    console.log('Fetching bugs/issues from Zoho');
+    console.log(
+      'Fetching bugs/issues from Zoho - API call #',
+      client.getApiCallCount ? client.getApiCallCount() : 'unknown'
+    );
     const response = await client.getIssues(client.portalId, client.projectId);
     console.log(
-      'Issues API response structure:',
-      JSON.stringify(response?.data?.slice(0, 2) || {}, null, 2).substring(0, 200) + '...'
+      'Issues API call completed - current count:',
+      client.getApiCallCount ? client.getApiCallCount() : 'unknown'
     );
+    console.log(`API calls made for ${response.data.length} issues across ${response.lastPage} pages`);
 
     const issues = response?.data;
 
@@ -332,11 +355,17 @@ async function extractIssues(adapter: WorkerAdapter<ExtractorState>, client: Zoh
   } catch (error) {
     if (error instanceof ZohoRateLimitError) {
       console.log(
-        `Rate limit reached: Made 100 API requests. Waiting ${error.delay / 1000} seconds before continuing.`
+        `Rate limit reached in extractIssues: Made 100 API requests. Waiting ${
+          error.delay / 1000
+        } seconds before continuing.`
       );
+      console.log(`API call count at rate limit: ${client.getApiCallCount ? client.getApiCallCount() : 'unknown'}`);
+      console.log(`Timestamp before delay: ${new Date().toISOString()}`);
+
       await adapter.emit(ExtractorEventType.ExtractionDataDelay, {
         delay: error.delay,
       });
+      console.log(`Timestamp after delay event: ${new Date().toISOString()}`);
       return true;
     }
 
@@ -349,90 +378,146 @@ async function extractIssues(adapter: WorkerAdapter<ExtractorState>, client: Zoh
 }
 
 /**
- * Extract and process bug/issue comments
+ * Extract and process bug/issue comments with more careful rate limiting
  */
 async function extractIssueComments(adapter: WorkerAdapter<ExtractorState>, client: ZohoClient): Promise<boolean> {
   try {
-    // Guard against undefined extractedIssues
+    // Initialize extractedIssues if undefined
     if (!adapter.state.extractedIssues) {
-      console.log('extractedIssues is undefined, initializing empty array');
       adapter.state.extractedIssues = [];
     }
 
+    // Get all issue IDs to process
     const issueIds = [...adapter.state.extractedIssues];
-    console.log(`Processing comments for ${issueIds.length} bugs/issues`);
-    adapter.state.extractedIssues = []; // Clear for next round
+    console.log(`Starting to process comments for ${issueIds.length} bugs/issues`);
 
-    let commentsPushed = 0;
+    // Clear the array to avoid processing duplicates if this function gets called again
+    adapter.state.extractedIssues = [];
 
-    for (const issueId of issueIds) {
-      try {
+    let totalCommentsPushed = 0;
+    let totalProcessed = 0;
+    let batchNumber = 1;
+
+    while (totalProcessed < issueIds.length) {
+      // Get current API call count before starting the batch
+      const currentApiCalls = client.getApiCallCount ? client.getApiCallCount() : 0;
+      console.log(`--- Processing batch ${batchNumber} of issue comments. Current API calls: ${currentApiCalls} ---`);
+
+      // Calculate how many items we can safely process in this batch
+      // If we're already close to 90 API calls, we'll do a smaller batch or wait
+      const safeApiCallsRemaining = Math.max(0, 90 - currentApiCalls);
+
+      // If we're already close to the limit, wait before starting
+      if (safeApiCallsRemaining < 10) {
+        console.log(`Already at ${currentApiCalls} API calls, waiting 2 minutes before next batch`);
+        await new Promise((resolve) => setTimeout(resolve, 2 * 60 * 1000));
+        batchNumber++;
+        continue; // Skip to next iteration of the loop
+      }
+
+      // Calculate batch size - each issue requires 1 API call for comments
+      const batchSize = safeApiCallsRemaining;
+      const endIndex = Math.min(totalProcessed + batchSize, issueIds.length);
+      const batchIds = issueIds.slice(totalProcessed, endIndex);
+
+      console.log(
+        `Processing comments for ${batchIds.length} issues in this batch (API calls allowed: ${safeApiCallsRemaining})`
+      );
+
+      let batchCommentsPushed = 0;
+      let batchApiCalls = 0;
+
+      // Process each issue in the current batch
+      for (const issueId of batchIds) {
         const cleanIssueId = typeof issueId === 'string' ? issueId : String(issueId);
         console.log(`Fetching comments for bug/issue: ${cleanIssueId}`);
 
-        const response = await client.getIssueComments(client.portalId, client.projectId, cleanIssueId);
-        console.log(
-          `Comments API response for issue ${cleanIssueId}:`,
-          JSON.stringify(response?.data || {}, null, 2).substring(0, 200) + '...'
-        );
+        try {
+          const apiCallsBefore = client.getApiCallCount ? client.getApiCallCount() : 0;
+          const response = await client.getIssueComments(client.portalId, client.projectId, cleanIssueId);
+          const apiCallsAfter = client.getApiCallCount ? client.getApiCallCount() : 0;
+          batchApiCalls += apiCallsAfter - apiCallsBefore;
 
-        if (response?.data?.comments?.length > 0) {
-          console.log(`Found ${response.data.comments.length} comments for bug/issue ${cleanIssueId}`);
+          if (response?.data?.comments?.length > 0) {
+            const comments = response.data.comments.map((comment) => ({
+              ...comment,
+              parent_Issue_Id: cleanIssueId,
+            }));
 
-          const comments = response.data.comments.map((comment) => ({
-            ...comment,
-            parent_Issue_Id: cleanIssueId,
-          }));
+            console.log(`Found ${comments.length} comments for bug/issue ${cleanIssueId}`);
 
-          // Add additional debugging
-          console.log(`Debug - Issue comment structure before pushing:`, JSON.stringify(comments[0], null, 2));
-
-          const repo = adapter.getRepo(ItemType.ISSUE_COMMENTS);
-          if (!repo) {
-            console.error('Issue comments repository not found');
-            continue;
+            // Push comments to repository
+            const repo = adapter.getRepo(ItemType.ISSUE_COMMENTS);
+            if (repo) {
+              await repo.push(comments);
+              batchCommentsPushed += comments.length;
+              console.log(`Successfully pushed ${comments.length} comments for issue ${cleanIssueId}`);
+            } else {
+              console.error('Issue comments repository not found');
+            }
+          } else {
+            console.log(`No comments found for bug/issue ${cleanIssueId}`);
           }
 
-          try {
-            await repo.push(comments);
-            commentsPushed += comments.length;
-            console.log(`Successfully pushed ${comments.length} comments for issue ${cleanIssueId}`);
-          } catch (pushError) {
-            console.error(`Error pushing comments for issue ${cleanIssueId}:`, pushError);
+          // Safety check - if we're approaching 90 calls, break out of the loop
+          if (client.getApiCallCount && client.getApiCallCount() >= 85) {
+            console.log(`Approaching API call limit (${client.getApiCallCount()}), stopping batch early`);
+            break;
           }
-        } else {
-          console.log(`No comments found for bug/issue ${cleanIssueId}`);
-        }
-      } catch (error) {
-        if (error instanceof ZohoRateLimitError) {
-          // Put remaining IDs back in the queue
-          adapter.state.extractedIssues.push(...issueIds.slice(issueIds.indexOf(issueId)));
-          console.log(
-            `Rate limit reached: Made 100 API requests. Waiting ${error.delay / 1000} seconds before continuing.`
-          );
-          await adapter.emit(ExtractorEventType.ExtractionDataDelay, {
-            delay: error.delay,
-          });
-          return true;
-        }
+        } catch (error) {
+          console.error(`Error processing comments for issue ${issueId}:`, error);
 
-        console.error(`Error fetching comments for bug/issue ${issueId}:`, error);
+          // If we hit a rate limit despite our precautions, save state and exit
+          if (error instanceof ZohoRateLimitError) {
+            console.log(`Rate limit reached despite precautions. Saving state and stopping.`);
+            // Save remaining issues for next run
+            adapter.state.extractedIssues = issueIds.slice(totalProcessed);
+            return true;
+          }
+        }
       }
+
+      // Update total processed count with the actual number we processed in this batch
+      totalProcessed += batchIds.length;
+      totalCommentsPushed += batchCommentsPushed;
+
+      console.log(`Completed batch ${batchNumber}. Pushed ${batchCommentsPushed} comments in this batch.`);
+      console.log(`Made approximately ${batchApiCalls} API calls in this batch.`);
+      console.log(
+        `Total progress: ${totalProcessed}/${issueIds.length} issues processed (${Math.floor(
+          (totalProcessed / issueIds.length) * 100
+        )}%)`
+      );
+
+      // Always wait 2 minutes between batches, even if we didn't use all 90 calls
+      if (totalProcessed < issueIds.length) {
+        console.log(`Waiting 2 minutes before processing next batch...`);
+        console.log(`Current time before delay: ${new Date().toISOString()}`);
+
+        await new Promise((resolve) => setTimeout(resolve, 2 * 60 * 1000));
+
+        console.log(`Current time after delay: ${new Date().toISOString()}`);
+        console.log(`Continuing with next batch of issue comments`);
+      }
+
+      batchNumber++;
     }
 
+    console.log(`Completed all issue comment extraction. Total comments pushed: ${totalCommentsPushed}`);
+
+    // Mark as complete
     const issueCommentsState = adapter.state[ItemType.ISSUE_COMMENTS];
     if (isExtractorStateBase(issueCommentsState)) {
       issueCommentsState.complete = true;
     }
 
-    console.log(`Completed issue comments extraction, pushed ${commentsPushed} comments in total`);
-    return false;
+    return false; // Continue with next steps
   } catch (error) {
-    console.error('Error processing bug/issue comments:', error);
+    console.error('Error in issue comments extraction:', error);
     await adapter.emit(ExtractorEventType.ExtractionDataError, {
       error: { message: error instanceof Error ? error.message : 'Unknown error' },
     });
-    return true;
+    return true; // Stop processing
   }
 }
 
@@ -441,12 +526,13 @@ async function extractIssueComments(adapter: WorkerAdapter<ExtractorState>, clie
  */
 async function extractTasks(adapter: WorkerAdapter<ExtractorState>, client: ZohoClient): Promise<boolean> {
   try {
-    console.log('Fetching tasks from Zoho');
+    console.log('Fetching tasks from Zoho - API call #', client.getApiCallCount ? client.getApiCallCount() : 'unknown');
     const response = await client.getTasks(client.portalId, client.projectId);
     console.log(
-      'Tasks API response structure:',
-      JSON.stringify(response?.data?.slice(0, 2) || {}, null, 2).substring(0, 200) + '...'
+      'Tasks API call completed - current count:',
+      client.getApiCallCount ? client.getApiCallCount() : 'unknown'
     );
+    console.log(`API calls made for ${response.data.length} tasks across ${response.lastPage} pages`);
 
     const tasks = response?.data;
 
@@ -500,11 +586,16 @@ async function extractTasks(adapter: WorkerAdapter<ExtractorState>, client: Zoho
   } catch (error) {
     if (error instanceof ZohoRateLimitError) {
       console.log(
-        `Rate limit reached: Made 100 API requests. Waiting ${error.delay / 1000} seconds before continuing.`
+        `Rate limit reached in extractTasks: Made 100 API requests. Waiting ${
+          error.delay / 1000
+        } seconds before continuing.`
       );
+      console.log(`API call count at rate limit: ${client.getApiCallCount ? client.getApiCallCount() : 'unknown'}`);
+      console.log(`Timestamp before delay: ${new Date().toISOString()}`);
       await adapter.emit(ExtractorEventType.ExtractionDataDelay, {
         delay: error.delay,
       });
+      console.log(`Timestamp after delay event: ${new Date().toISOString()}`);
       return true;
     }
 
@@ -517,89 +608,145 @@ async function extractTasks(adapter: WorkerAdapter<ExtractorState>, client: Zoho
 }
 
 /**
- * Extract and process task comments
+ * Extract and process task comments with more careful rate limiting
  */
 async function extractTaskComments(adapter: WorkerAdapter<ExtractorState>, client: ZohoClient): Promise<boolean> {
   try {
-    // Guard against undefined extractedTasks
+    // Initialize extractedTasks if undefined
     if (!adapter.state.extractedTasks) {
-      console.log('extractedTasks is undefined, initializing empty array');
       adapter.state.extractedTasks = [];
     }
 
+    // Get all task IDs to process
     const taskIds = [...adapter.state.extractedTasks];
-    console.log(`Processing comments for ${taskIds.length} tasks`);
-    adapter.state.extractedTasks = []; // Clear for next round
+    console.log(`Starting to process comments for ${taskIds.length} tasks`);
 
-    let commentsPushed = 0;
+    // Clear the array to avoid processing duplicates if this function gets called again
+    adapter.state.extractedTasks = [];
 
-    for (const taskId of taskIds) {
-      try {
+    let totalCommentsPushed = 0;
+    let totalProcessed = 0;
+    let batchNumber = 1;
+
+    while (totalProcessed < taskIds.length) {
+      // Get current API call count before starting the batch
+      const currentApiCalls = client.getApiCallCount ? client.getApiCallCount() : 0;
+      console.log(`--- Processing batch ${batchNumber} of task comments. Current API calls: ${currentApiCalls} ---`);
+
+      // Calculate how many items we can safely process in this batch
+      // If we're already close to 90 API calls, we'll do a smaller batch or wait
+      const safeApiCallsRemaining = Math.max(0, 90 - currentApiCalls);
+
+      // If we're already close to the limit, wait before starting
+      if (safeApiCallsRemaining < 10) {
+        console.log(`Already at ${currentApiCalls} API calls, waiting 2 minutes before next batch`);
+        await new Promise((resolve) => setTimeout(resolve, 2 * 60 * 1000));
+        batchNumber++;
+        continue; // Skip to next iteration of the loop
+      }
+
+      // Calculate batch size - each task requires 1 API call for comments
+      const batchSize = safeApiCallsRemaining;
+      const endIndex = Math.min(totalProcessed + batchSize, taskIds.length);
+      const batchIds = taskIds.slice(totalProcessed, endIndex);
+
+      console.log(
+        `Processing comments for ${batchIds.length} tasks in this batch (API calls allowed: ${safeApiCallsRemaining})`
+      );
+
+      let batchCommentsPushed = 0;
+      let batchApiCalls = 0;
+
+      // Process each task in the current batch
+      for (const taskId of batchIds) {
         const cleanTaskId = typeof taskId === 'string' ? taskId : String(taskId);
         console.log(`Fetching comments for task: ${cleanTaskId}`);
 
-        const response = await client.getTaskComments(client.portalId, client.projectId, cleanTaskId);
-        console.log(
-          `Comments API response for task ${cleanTaskId}:`,
-          JSON.stringify(response?.data || {}, null, 2).substring(0, 200) + '...'
-        );
+        try {
+          const apiCallsBefore = client.getApiCallCount ? client.getApiCallCount() : 0;
+          const response = await client.getTaskComments(client.portalId, client.projectId, cleanTaskId);
+          const apiCallsAfter = client.getApiCallCount ? client.getApiCallCount() : 0;
+          batchApiCalls += apiCallsAfter - apiCallsBefore;
 
-        if (response?.data?.comments?.length > 0) {
-          console.log(`Found ${response.data.comments.length} comments for task ${cleanTaskId}`);
+          if (response?.data?.comments?.length > 0) {
+            const comments = response.data.comments.map((comment) => ({
+              ...comment,
+              parent_Task_Id: cleanTaskId,
+            }));
 
-          const comments = response.data.comments.map((comment) => ({
-            ...comment,
-            parent_Task_Id: cleanTaskId,
-          }));
+            console.log(`Found ${comments.length} comments for task ${cleanTaskId}`);
 
-          // Add additional debugging
-          console.log(`Debug - Task comment structure before pushing:`, JSON.stringify(comments[0], null, 2));
-
-          const repo = adapter.getRepo(ItemType.TASK_COMMENTS);
-          if (!repo) {
-            console.error('Task comments repository not found');
-            continue;
+            // Push comments to repository
+            const repo = adapter.getRepo(ItemType.TASK_COMMENTS);
+            if (repo) {
+              await repo.push(comments);
+              batchCommentsPushed += comments.length;
+              console.log(`Successfully pushed ${comments.length} comments for task ${cleanTaskId}`);
+            } else {
+              console.error('Task comments repository not found');
+            }
+          } else {
+            console.log(`No comments found for task ${cleanTaskId}`);
           }
 
-          try {
-            await repo.push(comments);
-            commentsPushed += comments.length;
-            console.log(`Successfully pushed ${comments.length} comments for task ${cleanTaskId}`);
-          } catch (pushError) {
-            console.error(`Error pushing comments for task ${cleanTaskId}:`, pushError);
+          // Safety check - if we're approaching 90 calls, break out of the loop
+          if (client.getApiCallCount && client.getApiCallCount() >= 85) {
+            console.log(`Approaching API call limit (${client.getApiCallCount()}), stopping batch early`);
+            break;
           }
-        } else {
-          console.log(`No comments found for task ${cleanTaskId}`);
-        }
-      } catch (error) {
-        if (error instanceof ZohoRateLimitError) {
-          // Put remaining IDs back in the queue
-          adapter.state.extractedTasks.push(...taskIds.slice(taskIds.indexOf(taskId)));
-          console.log(
-            `Rate limit reached: Made 100 API requests. Waiting ${error.delay / 1000} seconds before continuing.`
-          );
-          await adapter.emit(ExtractorEventType.ExtractionDataDelay, {
-            delay: error.delay,
-          });
-          return true;
-        }
+        } catch (error) {
+          console.error(`Error processing comments for task ${taskId}:`, error);
 
-        console.error(`Error fetching comments for task ${taskId}:`, error);
+          // If we hit a rate limit despite our precautions, save state and exit
+          if (error instanceof ZohoRateLimitError) {
+            console.log(`Rate limit reached despite precautions. Saving state and stopping.`);
+            // Save remaining tasks for next run
+            adapter.state.extractedTasks = taskIds.slice(totalProcessed);
+            return true;
+          }
+        }
       }
+
+      // Update total processed count with the actual number we processed in this batch
+      totalProcessed += batchIds.length;
+      totalCommentsPushed += batchCommentsPushed;
+
+      console.log(`Completed batch ${batchNumber}. Pushed ${batchCommentsPushed} comments in this batch.`);
+      console.log(`Made approximately ${batchApiCalls} API calls in this batch.`);
+      console.log(
+        `Total progress: ${totalProcessed}/${taskIds.length} tasks processed (${Math.floor(
+          (totalProcessed / taskIds.length) * 100
+        )}%)`
+      );
+
+      // Always wait 2 minutes between batches, even if we didn't use all 90 calls
+      if (totalProcessed < taskIds.length) {
+        console.log(`Waiting 2 minutes before processing next batch...`);
+        console.log(`Current time before delay: ${new Date().toISOString()}`);
+
+        await new Promise((resolve) => setTimeout(resolve, 2 * 60 * 1000));
+
+        console.log(`Current time after delay: ${new Date().toISOString()}`);
+        console.log(`Continuing with next batch of task comments`);
+      }
+
+      batchNumber++;
     }
 
+    console.log(`Completed all task comment extraction. Total comments pushed: ${totalCommentsPushed}`);
+
+    // Mark as complete
     const taskCommentsState = adapter.state[ItemType.TASK_COMMENTS];
     if (isExtractorStateBase(taskCommentsState)) {
       taskCommentsState.complete = true;
     }
 
-    console.log(`Completed task comments extraction, pushed ${commentsPushed} comments in total`);
-    return false;
+    return false; // Continue with next steps
   } catch (error) {
-    console.error('Error processing task comments:', error);
+    console.error('Error in task comments extraction:', error);
     await adapter.emit(ExtractorEventType.ExtractionDataError, {
       error: { message: error instanceof Error ? error.message : 'Unknown error' },
     });
-    return true;
+    return true; // Stop processing
   }
 }
