@@ -1,0 +1,262 @@
+{
+  "schema_version": "v0.2.0",
+  "record_types": {
+    "issues": {
+      "name": "Issues",
+      "fields": {
+        "id": {
+          "type": "text",
+          "name": "Issue ID"
+        },
+        "title": {
+          "type": "text",
+          "name": "Title"
+        },
+        "description": {
+          "type": "rich_text",
+          "name": "Description"
+        },
+        "bug_number": {
+          "type": "text",
+          "name": "Bug Number"
+        },
+        "status": {
+          "type": "enum",
+          "name": "Status",
+          "enum": {
+            "values": [
+              {
+                "key": "open",
+                "name": "Open"
+              },
+              {
+                "key": "closed",
+                "name": "Closed"
+              }
+            ]
+          }
+        },
+        "assignee": {
+          "type": "reference",
+          "name": "Assignee",
+          "reference": {
+            "refers_to": {
+              "#record:users": {}
+            }
+          }
+        },
+        "reporter": {
+          "type": "reference",
+          "name": "Reporter",
+          "reference": {
+            "refers_to": {
+              "#record:users": {}
+            }
+          }
+        },
+        "created_time": {
+          "type": "timestamp",
+          "name": "Created Time"
+        },
+        "updated_time": {
+          "type": "timestamp",
+          "name": "Updated Time"
+        },
+        "comment_count": {
+          "type": "int",
+          "name": "Comment Count"
+        },
+        "flag": {
+          "type": "text",
+          "name": "Flag"
+        },
+        "html_url": {
+          "type": "text",
+          "name": "HTML URL"
+        }
+      }
+    },
+    "tasks": {
+      "name": "Tasks",
+      "fields": {
+        "id": {
+          "type": "text",
+          "name": "Task ID"
+        },
+        "name": {
+          "type": "text",
+          "name": "Task Name"
+        },
+        "description": {
+          "type": "rich_text",
+          "name": "Description"
+        },
+        "status": {
+          "type": "enum",
+          "name": "Status",
+          "enum": {
+            "values": [
+              {
+                "key": "open",
+                "name": "Open"
+              },
+              {
+                "key": "closed",
+                "name": "Closed"
+              }
+            ]
+          }
+        },
+        "priority": {
+          "type": "text",
+          "name": "Priority"
+        },
+        "owners": {
+          "type": "reference",
+          "name": "Owners",
+          "collection": {},
+          "reference": {
+            "refers_to": {
+              "#record:users": {}
+            }
+          }
+        },
+        "start_date": {
+          "type": "timestamp",
+          "name": "Start Date"
+        },
+        "end_date": {
+          "type": "timestamp",
+          "name": "End Date"
+        },
+        "created_time": {
+          "type": "timestamp",
+          "name": "Created Time"
+        },
+        "last_updated_time": {
+          "type": "timestamp",
+          "name": "Last Updated Time"
+        },
+        "completed": {
+          "type": "bool",
+          "name": "Is Completed"
+        },
+        "percent_complete": {
+          "type": "text",
+          "name": "Percent Complete"
+        },
+        "html_url": {
+          "type": "text",
+          "name": "HTML URL"
+        }
+      }
+    },
+    "users": {
+      "name": "Users",
+      "fields": {
+        "id": {
+          "type": "text",
+          "name": "User ID"
+        },
+        "name": {
+          "type": "text",
+          "name": "Name"
+        },
+        "email": {
+          "type": "text",
+          "name": "Email"
+        },
+        "role": {
+          "type": "text",
+          "name": "Role"
+        },
+        "profile_type": {
+          "type": "text",
+          "name": "Profile Type"
+        },
+        "active": {
+          "type": "bool",
+          "name": "Is Active"
+        }
+      }
+    },
+    "issue_comments": {
+      "name": "Issue Comments",
+      "fields": {
+        "id": {
+          "type": "text",
+          "name": "Comment ID"
+        },
+        "content": {
+          "type": "rich_text",
+          "name": "Content"
+        },
+        "added_by": {
+          "type": "reference",
+          "name": "Added By",
+          "reference": {
+            "refers_to": {
+              "#record:users": {}
+            }
+          }
+        },
+        "parent_Issue_Id": {
+          "type": "reference",
+          "name": "Parent Issue",
+          "reference": {
+            "refers_to": {
+              "#record:issues": {}
+            }
+          }
+        },
+        "created_time": {
+          "type": "timestamp",
+          "name": "Created Time"
+        },
+        "updated_time": {
+          "type": "timestamp",
+          "name": "Updated Time"
+        }
+      }
+    },
+    "task_comments": {
+      "name": "Task Comments",
+      "fields": {
+        "id": {
+          "type": "text",
+          "name": "Comment ID"
+        },
+        "content": {
+          "type": "rich_text",
+          "name": "Content"
+        },
+        "added_by": {
+          "type": "reference",
+          "name": "Added By",
+          "reference": {
+            "refers_to": {
+              "#record:users": {}
+            }
+          }
+        },
+        "parent_Task_Id": {
+          "type": "reference",
+          "name": "Parent Task",
+          "reference": {
+            "refers_to": {
+              "#record:tasks": {}
+            }
+          }
+        },
+        "created_time": {
+          "type": "timestamp",
+          "name": "Created Time"
+        },
+        "updated_time": {
+          "type": "timestamp",
+          "name": "Updated Time"
+        }
+      }
+    }
+  }
+}

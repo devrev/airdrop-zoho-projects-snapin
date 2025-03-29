@@ -1,16 +1,6 @@
 import { AirdropEvent, EventType, spawn } from '@devrev/ts-adaas';
-
-interface DummyExtractorState {
-  issues: { completed: boolean };
-  users: { completed: boolean };
-  attachemnts: { completed: boolean };
-}
-
-const initialState: DummyExtractorState = {
-  issues: { completed: false },
-  users: { completed: false },
-  attachemnts: { completed: false },
-};
+import { initialState } from './zoho/helper';
+import { ExtractorState } from './zoho/types';
 
 function getWorkerPerExtractionPhase(event: AirdropEvent) {
   let path;
@@ -32,7 +22,7 @@ function getWorkerPerExtractionPhase(event: AirdropEvent) {
 const run = async (events: AirdropEvent[]) => {
   for (const event of events) {
     const file = getWorkerPerExtractionPhase(event);
-    await spawn<DummyExtractorState>({
+    await spawn<ExtractorState>({
       event,
       initialState,
       workerPath: file,
