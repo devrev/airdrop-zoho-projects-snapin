@@ -90,6 +90,7 @@ export interface ZohoIssue {
   updated_time: string;
   reporter_id: string;
   assignee_zpuid?: string;
+  comment_count: string;
 }
 
 export interface ZohoTaskOwner {

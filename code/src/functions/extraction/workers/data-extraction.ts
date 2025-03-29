@@ -1,12 +1,7 @@
 import { ExtractorEventType, processTask, SyncMode, WorkerAdapter } from '@devrev/ts-adaas';
 import { ZohoClient } from '../zoho/client';
 import { getItemTypesToExtract, initialState, repos, ZohoRateLimitError } from '../zoho/helper';
-import {
-  ExtractorState,
-  ExtractorStateBase,
-  ItemType,
-  ZohoGlobals,
-} from '../zoho/types';
+import { ExtractorState, ExtractorStateBase, ItemType, ZohoGlobals } from '../zoho/types';
 
 function getZohoGlobalsFromEvent(event: any): ZohoGlobals {
   return {
@@ -24,7 +19,7 @@ function isExtractorStateBase(obj: any): obj is ExtractorStateBase {
 processTask<ExtractorState>({
   task: async ({ adapter }: { adapter: WorkerAdapter<ExtractorState> }) => {
     // Initialize repositories - make sure this is correctly initializing all repos
-    adapter.initializeRepos(repos); 
+    adapter.initializeRepos(repos);
 
     // If state is not initialized, use the default initial state
     if (!adapter.state) {
@@ -233,11 +228,13 @@ async function extractIssues(adapter: WorkerAdapter<ExtractorState>, client: Zoh
       return true;
     }
 
-    const issueIds = issues.map((issue) => {
-      const id = String(issue.id_string);
-      console.log(`Extracted bug/issue ID: ${id}`);
-      return id;
-    });
+    // Filter issues to only include those with comments
+    const issueIds = issues
+      .filter((issue) => parseInt(issue.comment_count, 10) > 0)
+      .map((issue) => {
+        const id = String(issue.id_string);
+        return id;
+      });
 
     if (!adapter.state.extractedIssues) {
       adapter.state.extractedIssues = [];
@@ -300,7 +297,7 @@ async function extractIssueComments(adapter: WorkerAdapter<ExtractorState>, clie
         console.log(`Already at ${currentApiCalls} API calls, waiting 2 minutes before next batch`);
         await new Promise((resolve) => setTimeout(resolve, 2 * 60 * 1000));
         batchNumber++;
-        continue; 
+        continue;
       }
 
       const batchSize = safeApiCallsRemaining;
@@ -374,13 +371,13 @@ async function extractIssueComments(adapter: WorkerAdapter<ExtractorState>, clie
       issueCommentsState.complete = true;
     }
 
-    return false; 
+    return false;
   } catch (error) {
     console.error('Error in issue comments extraction:', error);
     await adapter.emit(ExtractorEventType.ExtractionDataError, {
       error: { message: error instanceof Error ? error.message : 'Unknown error' },
     });
-    return true; 
+    return true;
   }
 }
 
@@ -425,7 +422,7 @@ async function extractTasks(adapter: WorkerAdapter<ExtractorState>, client: Zoho
       adapter.state.extractedTasks = [];
     }
     adapter.state.extractedTasks = taskIds;
-    
+
     const taskState = adapter.state[ItemType.TASKS];
 
     if (isExtractorStateBase(taskState)) {
@@ -480,7 +477,7 @@ async function extractTaskComments(adapter: WorkerAdapter<ExtractorState>, clien
         console.log(`Already at ${currentApiCalls} API calls, waiting 2 minutes before next batch`);
         await new Promise((resolve) => setTimeout(resolve, 2 * 60 * 1000));
         batchNumber++;
-        continue; 
+        continue;
       }
 
       const batchSize = safeApiCallsRemaining;
@@ -552,12 +549,12 @@ async function extractTaskComments(adapter: WorkerAdapter<ExtractorState>, clien
       taskCommentsState.complete = true;
     }
 
-    return false; 
+    return false;
   } catch (error) {
     console.error('Error in task comments extraction:', error);
     await adapter.emit(ExtractorEventType.ExtractionDataError, {
       error: { message: error instanceof Error ? error.message : 'Unknown error' },
     });
-    return true; 
+    return true;
   }
 }
