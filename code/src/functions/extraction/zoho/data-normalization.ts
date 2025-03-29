@@ -1,13 +1,7 @@
 import { NormalizedItem } from '@devrev/ts-adaas';
 import { ZohoIssue, ZohoIssueComment, ZohoTask, ZohoTaskComment, ZohoUser } from './types';
 const DEFAULT_DATE = '1970-01-01T00:00:00Z';
-function transformHtmlContent(content: string | null): string | null {
-  if (!content) return null;
-  return content
-    .replace(/<div>/g, '')
-    .replace(/<\/div>/g, '\n')
-    .trim();
-}
+
 export function normalizeUser(user: ZohoUser): NormalizedItem {
   return {
     id: user.id,
@@ -29,7 +23,7 @@ export function normalizeTask(task: ZohoTask): NormalizedItem {
     modified_date: new Date(task.last_updated_time || DEFAULT_DATE).toISOString(),
     data: {
       name: task.name,
-      description: [transformHtmlContent(task.description)],
+      description: task.description,
       status: task.status.type,
       priority: task.priority,
       created_by: task.created_by,
@@ -49,7 +43,7 @@ export function normalizeIssue(issue: ZohoIssue): NormalizedItem {
     modified_date: new Date(issue.updated_time || DEFAULT_DATE).toISOString(),
     data: {
       title: issue.title,
-      description: [transformHtmlContent(issue.description)],
+      description: issue.description,
       bug_number: issue.bug_number,
       status: issue.status.type,
       reporter_id: issue.reporter_id,
@@ -64,7 +58,7 @@ export function normalizeIssueComment(comment: ZohoIssueComment): NormalizedItem
     created_date: new Date(comment.created_time || DEFAULT_DATE).toISOString(),
     modified_date: new Date(comment.updated_time || comment.created_time || DEFAULT_DATE).toISOString(),
     data: {
-      content: transformHtmlContent(comment.comment) || '',
+      content: comment.comment,
       added_by: comment.added_by,
       parent_Issue_Id: String(comment.parent_Issue_Id),
       created_time: new Date(comment.created_time || DEFAULT_DATE).toISOString(),
@@ -79,7 +73,7 @@ export function normalizeTaskComment(comment: ZohoTaskComment): NormalizedItem {
     created_date: new Date(comment.created_time || DEFAULT_DATE).toISOString(),
     modified_date: new Date(comment.updated_time || comment.created_time || DEFAULT_DATE).toISOString(),
     data: {
-      content: transformHtmlContent(comment.content) || '',
+      content: comment.content,
       added_by: comment.added_by,
       parent_Task_Id: String(comment.parent_Task_Id),
       created_time: new Date(comment.created_time || DEFAULT_DATE).toISOString(),

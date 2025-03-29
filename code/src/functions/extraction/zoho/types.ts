@@ -38,13 +38,6 @@ export interface ExtractorState {
   project_id: string;
 }
 
-export interface ZohoConfig {
-  accessToken: string;
-  portalId: string;
-  projectId: string;
-  baseUrl?: string;
-}
-
 export interface ZohoPortal {
   id: string;
   id_string: string;
@@ -207,44 +200,6 @@ export interface PagedResponse<T> {
   lastPage: number;
 }
 
-export interface CreateCommentParams {
-  content: string;
-}
-
-export interface UpdateCommentParams {
-  content: string;
-}
-
-export interface CreateTaskParams {
-  name: string;
-  description?: string;
-  status?: string;
-  priority?: string;
-}
-
-export interface UpdateTaskParams {
-  name?: string;
-  description?: string;
-  status?: string;
-  priority?: string;
-}
-
-export interface CreateIssueParams {
-  title: string;
-  description?: string;
-  severity?: string;
-}
-
-export interface UpdateIssueParams {
-  title?: string;
-  description?: string;
-  status?: string;
-  severity?: string;
-}
-
-/**
- * Global configuration parameters extracted from the event
- */
 export interface ZohoGlobals {
   accessToken: string;
   devRevBaseUrl?: string;

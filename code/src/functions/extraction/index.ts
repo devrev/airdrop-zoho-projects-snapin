@@ -26,7 +26,6 @@ const run = async (events: AirdropEvent[]) => {
       event,
       initialState,
       workerPath: file,
-      options: { isLocalDevelopment: true },
     });
 
     console.log('Finished extraction for event: ', event.payload.event_type);
