@@ -153,6 +153,7 @@ export interface ZohoTask {
   duration_type: string;
   completed: boolean;
   key: string;
+  is_comment_added: string;
 }
 
 export interface ZohoIssueComment {

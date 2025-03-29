@@ -412,11 +412,15 @@ async function extractTasks(adapter: WorkerAdapter<ExtractorState>, client: Zoho
       return true;
     }
 
-    const taskIds = tasks.map((task) => {
-      const id = String(task.id_string);
-      console.log(`Extracted task ID: ${id}`);
-      return id;
-    });
+    // Filter tasks to only include those with comments
+    const taskIds = tasks
+      .filter((task) => task.is_comment_added === 'true')
+      .map((task) => {
+        const id = String(task.id_string);
+        return id;
+      });
+
+    console.log(`Found ${taskIds.length} tasks with comments out of ${tasks.length} total tasks`);
 
     if (!adapter.state.extractedTasks) {
       adapter.state.extractedTasks = [];
